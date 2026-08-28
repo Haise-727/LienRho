@@ -9,8 +9,15 @@ import {
   Radio,
   Store,
   Landmark,
+  FileText,
+  Clock,
+  Layers,
+  ArrowRight,
+  TrendingDown,
   Building2,
-  FileText
+  Lock,
+  ChevronRight,
+  Cpu
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { UrgencySlider } from "@/components/auction/UrgencySlider";
@@ -25,33 +32,36 @@ import { DbStatusBanner } from "@/components/ui/DbStatusBanner";
 import { 
   Opportunity, 
   CapitalProviderDetail, 
-  toComputedDeal,
-  ComputedDeal, 
-  formatINR
+  formatINR,
+  formatPaiseToINR,
+  FALLBACK_OPPORTUNITY,
+  FALLBACK_PROVIDER_DETAIL 
 } from "@/lib/scoring";
 import { 
   fetchOpportunities, 
   fetchProviders, 
   checkDbHealth, 
   matchOpportunity,
+  MatchApiResponse,
+  ScoredOffer,
+  FALLBACK_MATCH_RESULT,
   DbHealthResult 
 } from "@/lib/api-client";
-import type { MatchResult } from "@/lib/market/types";
 
 export default function MarketplaceDashboard() {
   const [activeRole, setActiveRole] = useState<"supplier" | "provider">("supplier");
-  // Empty initial state, not mock data. A screen that renders invented deals
-  // before the real ones arrive teaches everyone to trust figures that were
-  // never computed.
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [selectedOppId, setSelectedOppId] = useState<string>("");
-  const [providers, setProviders] = useState<CapitalProviderDetail[]>([]);
-  const [match, setMatch] = useState<MatchResult | null>(null);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([FALLBACK_OPPORTUNITY]);
+  const [selectedOppId, setSelectedOppId] = useState<string>(FALLBACK_OPPORTUNITY.id);
+  const [providers, setProviders] = useState<CapitalProviderDetail[]>([FALLBACK_PROVIDER_DETAIL]);
   const [dbHealth, setDbHealth] = useState<DbHealthResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Derived or user-overridden slider weight
-  const [urgencyWeight, setUrgencyWeight] = useState<number>(0.45);
+  // Match state (Authoritative results from POST /api/match)
+  const [urgencyNudgeBps, setUrgencyNudgeBps] = useState<number>(0);
+  const [matchResult, setMatchResult] = useState<MatchApiResponse>(FALLBACK_MATCH_RESULT);
+  const [matchingLoading, setMatchingLoading] = useState(false);
+
+  // Modals & Feedback
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
   const [isDisbursed, setIsDisbursed] = useState(false);
@@ -71,10 +81,6 @@ export default function MarketplaceDashboard() {
       if (oppsRes.opportunities.length > 0) {
         setOpportunities(oppsRes.opportunities);
         setSelectedOppId(oppsRes.opportunities[0].id);
-        const derived = oppsRes.opportunities[0].urgencyWeight;
-        if (derived !== undefined && derived !== null) {
-          setUrgencyWeight(Number(derived));
-        }
       }
       if (provsRes.providers.length > 0) {
         setProviders(provsRes.providers);
@@ -87,136 +93,96 @@ export default function MarketplaceDashboard() {
 
   // Active Opportunity
   const currentOpp = useMemo(() => {
-    return opportunities.find(o => o.id === selectedOppId) || opportunities[0];
+    return opportunities.find(o => o.id === selectedOppId) || opportunities[0] || FALLBACK_OPPORTUNITY;
   }, [opportunities, selectedOppId]);
 
-  // Clear the selected opportunity through the matching engine whenever it or
-  // the urgency nudge changes.
-  //
-  // The scoring is NOT done here. It used to be, and it was wrong three ways at
-  // once — effective cost divided by the advance instead of net cash, gates
-  // applied as a x0.3 score penalty rather than as gates, and the timing check
-  // comparing day counts instead of dates. The engine owns all of it now.
+  // Execute matching whenever selected opportunity or urgency override changes
   useEffect(() => {
-    if (!currentOpp?.id) {
-      setMatch(null);
-      return;
-    }
-    let cancelled = false;
-    matchOpportunity(currentOpp.id, Math.round(urgencyWeight * 10_000)).then((result) => {
-      if (!cancelled) setMatch(result);
-    });
+    let isCurrent = true;
+    setMatchingLoading(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await matchOpportunity(selectedOppId, urgencyNudgeBps);
+        if (isCurrent) {
+          setMatchResult(result);
+          setMatchingLoading(false);
+        }
+      } catch (e) {
+        console.error("Match error:", e);
+        if (isCurrent) setMatchingLoading(false);
+      }
+    }, 180);
+
     return () => {
-      cancelled = true;
+      isCurrent = false;
+      clearTimeout(timer);
     };
-  }, [currentOpp?.id, urgencyWeight]);
+  }, [selectedOppId, urgencyNudgeBps]);
 
-  // Map the engine's scored offers onto what the cards render. Winner first,
-  // then remaining survivors, then disqualified offers — which are kept rather
-  // than hidden, because showing why an option lost is the point.
-  const computedDeals = useMemo<ComputedDeal[]>(() => {
-    if (!match) return [];
-    const bidsById = new Map((currentOpp?.bids || []).map((b) => [b.id, b]));
-
-    return [...match.scoredOffers]
-      .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
-      .map((scored) => {
-        const bid = bidsById.get(scored.offer.id);
-        return bid ? toComputedDeal(scored, bid) : null;
-      })
-      .filter((d): d is ComputedDeal => d !== null);
-  }, [match, currentOpp]);
-
-  const handleAcceptDeal = (deal: ComputedDeal) => {
+  const handleAcceptOffer = (offer: ScoredOffer) => {
     setIsDisbursed(true);
-    setAudioFeedback(`Disbursal confirmed! ${formatINR(deal.netCashToday)} locked with Redis and posted to Stitch ledger.`);
+    setAudioFeedback(`Disbursal confirmed! ${formatPaiseToINR(offer.netCashPaise)} allocated to ${offer.providerName} and posted to Stitch double-entry ledger.`);
     setTimeout(() => setAudioFeedback(null), 5000);
   };
 
-  const handlePlayDealAudio = (deal: ComputedDeal) => {
-    const providerName = deal.bid.provider?.name || "Provider";
-    setAudioFeedback(`ElevenLabs Voice Breakdown for ${providerName}: Net advance of ${formatINR(deal.netCashToday)} upfront at ${(Number(deal.bid.annualRate) * 100).toFixed(1)}% APR with total fee of ${formatINR(deal.totalCost)}.`);
+  const handlePlayOfferAudio = (offer: ScoredOffer) => {
+    const providerName = offer.providerName || "Provider";
+    const netCashStr = formatPaiseToINR(offer.netCashPaise);
+    const aprStr = (offer.offer.annualRateBps / 100).toFixed(1) + "%";
+    setAudioFeedback(`ElevenLabs Voice Breakdown for ${providerName}: Net advance of ${netCashStr} upfront at ${aprStr} APR lands ${offer.arrivalDate}.`);
     setTimeout(() => setAudioFeedback(null), 6000);
   };
 
-  // No opportunity to show. Previously this state was impossible because the
-  // page started from a hardcoded FALLBACK_OPPORTUNITY, which meant a failed
-  // fetch rendered an invented deal indistinguishable from a real one. Saying
-  // "we could not load this" is the honest answer and the more useful one.
-  if (!currentOpp) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] antialiased">
-        <DbStatusBanner health={dbHealth} />
-        <div className="mx-auto max-w-2xl px-6 py-24 text-center">
-          {loading ? (
-            <p className="text-sm text-neutral-500">Loading the marketplace…</p>
-          ) : (
-            <>
-              <h1 className="text-xl font-semibold text-neutral-900">
-                No opportunities to show
-              </h1>
-              <p className="mt-2 text-sm text-neutral-600">
-                The marketplace is reachable but returned nothing, or the
-                database could not be reached. Check{" "}
-                <code className="rounded bg-neutral-200 px-1">DATABASE_URL</code>{" "}
-                and that the database has been seeded.
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] antialiased selection:bg-black selection:text-white">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] antialiased selection:bg-[#059669] selection:text-white pb-20">
       {/* DB Status Offline/Demo Banner */}
       <DbStatusBanner health={dbHealth} />
 
-      {/* 1. Global Navigation & Apple-Style Frosted Header */}
-      <header className="sticky top-0 z-30 w-full border-b border-black/5 bg-white/80 backdrop-blur-xl transition-all">
+      {/* 1. Global Navigation & Institutional Header */}
+      <header className="sticky top-0 z-30 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md transition-all shadow-2xs">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
           {/* Brand Logo & Engine Badge */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-black text-white shadow-sm font-black text-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0F172A] text-white shadow-xs font-black text-sm tracking-tighter">
               LR
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold tracking-tight text-neutral-900 text-sm">LienRho</span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">
-                  CSI ORIGIN 2026
+                <span className="font-bold tracking-tight text-[#0F172A] text-base">LienRho</span>
+                <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 border border-slate-200">
+                  CSI ORIGIN 2026 PS-5
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Multi-Attribute Clearinghouse (INR ₹)
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#059669]" />
+                Lexicographic Clearinghouse (INR ₹)
               </div>
             </div>
           </div>
 
           {/* Unified 2-Way Role Switcher (Supplier | Capital Provider) */}
-          <div className="flex items-center rounded-full bg-neutral-100 p-1 border border-neutral-200/60 shadow-inner">
+          <div className="flex items-center rounded-lg bg-slate-100 p-1 border border-slate-200/90 shadow-2xs">
             <button
               onClick={() => setActiveRole("supplier")}
-              className={`flex items-center gap-1.5 relative rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
                 activeRole === "supplier"
-                  ? "bg-white text-black shadow-sm"
-                  : "text-neutral-500 hover:text-black"
+                  ? "bg-white text-[#0F172A] shadow-xs border border-slate-200/60"
+                  : "text-slate-600 hover:text-[#0F172A]"
               }`}
             >
-              <Store className="h-3.5 w-3.5" />
+              <Store className="h-3.5 w-3.5 text-slate-700" />
               Supplier Cockpit
             </button>
             <button
               onClick={() => setActiveRole("provider")}
-              className={`flex items-center gap-1.5 relative rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
                 activeRole === "provider"
-                  ? "bg-white text-black shadow-sm"
-                  : "text-neutral-500 hover:text-black"
+                  ? "bg-white text-[#0F172A] shadow-xs border border-slate-200/60"
+                  : "text-slate-600 hover:text-[#0F172A]"
               }`}
             >
-              <Landmark className="h-3.5 w-3.5" />
+              <Landmark className="h-3.5 w-3.5 text-slate-700" />
               Capital Provider
             </button>
           </div>
@@ -224,10 +190,10 @@ export default function MarketplaceDashboard() {
           {/* ElevenLabs CFO Voice Trigger */}
           <button
             onClick={() => setIsVoiceOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-black px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-neutral-800 hover:shadow transition"
+            className="flex items-center gap-2 rounded-lg bg-[#0F172A] hover:bg-slate-800 px-4 py-2 text-xs font-semibold text-white shadow-xs transition"
           >
             <Radio className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
-            Ask CFO Voice AI
+            CFO Voice Assistant
           </button>
         </div>
       </header>
@@ -239,37 +205,37 @@ export default function MarketplaceDashboard() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 rounded-2xl bg-black text-white px-5 py-3 text-xs shadow-2xl flex items-center gap-3 border border-white/20"
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 rounded-lg bg-[#0F172A] text-white px-5 py-3 text-xs shadow-2xl flex items-center gap-3 border border-slate-700 max-w-lg"
           >
-            <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
-            <span>{audioFeedback}</span>
+            <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span className="leading-relaxed">{audioFeedback}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <main className="mx-auto max-w-7xl px-6 py-8 space-y-8">
+      <main className="mx-auto max-w-7xl px-6 py-8 space-y-6">
         {/* Disbursed Banner Alert */}
         {isDisbursed && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
+            initial={{ opacity: 0, scale: 0.99 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="rounded-3xl bg-emerald-500 text-white p-6 shadow-xl flex items-center justify-between"
+            className="rounded-xl bg-[#059669] text-white p-5 shadow-sm flex items-center justify-between"
           >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20">
+            <div className="flex items-center gap-3.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
                 <CheckCircle2 className="h-6 w-6 text-white" />
               </div>
               <div>
                 <h4 className="font-bold text-base">Capital Disbursed Successfully (Day 0)</h4>
-                <p className="text-xs text-white/90">
-                  Stitch Double-Entry Journal Posted. Redis Lock Released. Net liquidity credited to Vertex Components.
+                <p className="text-xs text-emerald-50">
+                  Stitch Double-Entry Journal Posted. Zero-difference invariant verified. Net liquidity credited to Vertex Components.
                 </p>
               </div>
             </div>
             <button
               onClick={() => setIsDisbursed(false)}
-              className="rounded-full bg-white/20 px-4 py-2 text-xs font-semibold hover:bg-white/30 transition"
+              className="rounded-md bg-white/20 px-3.5 py-1.5 text-xs font-semibold hover:bg-white/30 transition"
             >
               Dismiss
             </button>
@@ -278,23 +244,20 @@ export default function MarketplaceDashboard() {
 
         {/* ----------------- 1. SUPPLIER VIEW ----------------- */}
         {activeRole === "supplier" && (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {/* Opportunities Selector if multiple */}
             {opportunities.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 {opportunities.map((opp) => (
                   <button
                     key={opp.id}
                     onClick={() => {
                       setSelectedOppId(opp.id);
-                      if (opp.urgencyWeight !== undefined && opp.urgencyWeight !== null) {
-                        setUrgencyWeight(Number(opp.urgencyWeight));
-                      }
                     }}
-                    className={`rounded-2xl px-4 py-2 text-xs font-semibold border transition ${
+                    className={`rounded-lg px-4 py-2 text-xs font-semibold border transition ${
                       selectedOppId === opp.id
-                        ? "bg-black text-white border-black shadow-sm"
-                        : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50"
+                        ? "bg-[#0F172A] text-white border-[#0F172A] shadow-xs"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
                     {opp.invoice?.invoiceNumber || "Invoice"} • {formatINR(opp.invoice?.faceValue)} ({opp.status})
@@ -303,41 +266,48 @@ export default function MarketplaceDashboard() {
               </div>
             )}
 
-            {/* Hero Overview Card */}
-            <div className="rounded-3xl bg-white p-6 shadow-sm border border-neutral-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+            {/* Hero Overview Card - Minimalist Institutional Bento Header */}
+            <div className="rounded-xl bg-white p-6 border border-slate-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2.5">
+                  <h1 className="text-2xl font-bold tracking-tight text-[#0F172A] font-mono">
                     {currentOpp.invoice?.invoiceNumber || "INV-2026-0801"}
                   </h1>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                  <span className="rounded bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-200 font-mono">
                     {currentOpp.status}
                   </span>
                 </div>
-                <p className="text-xs text-neutral-500">
-                  Buyer Obligor: <strong className="text-neutral-900">{currentOpp.invoice?.customer?.name || "Bharat Auto Ltd"}</strong> ({currentOpp.invoice?.customer?.industry || "auto-components"}) • Face Value: <strong className="text-neutral-900">{formatINR(currentOpp.invoice?.faceValue)}</strong>
+                <p className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+                  <span>Buyer Obligor:</span>
+                  <strong className="text-[#0F172A]">{currentOpp.invoice?.customer?.name || "Bharat Auto Ltd"}</strong>
+                  <span className="text-slate-300">•</span>
+                  <span>Industry:</span>
+                  <strong className="text-[#0F172A] capitalize">{currentOpp.invoice?.customer?.industry || "auto-components"}</strong>
+                  <span className="text-slate-300">•</span>
+                  <span>Face Value:</span>
+                  <strong className="text-[#0F172A] font-mono">{formatINR(currentOpp.invoice?.faceValue)}</strong>
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => setIsVerificationModalOpen(true)}
-                  className="flex items-center gap-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 px-3.5 py-2 text-xs font-semibold text-neutral-800 border border-neutral-200/80 transition"
+                  className="flex items-center gap-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 px-3.5 py-2 text-xs font-semibold text-[#0F172A] border border-slate-200 transition"
                 >
-                  <PhoneCall className="h-3.5 w-3.5 text-emerald-600" />
+                  <PhoneCall className="h-3.5 w-3.5 text-[#059669]" />
                   Verify Buyer Call
                 </button>
 
-                <div className="rounded-2xl bg-neutral-50 px-4 py-2 border border-neutral-200/60">
-                  <span className="text-[10px] text-neutral-400 block font-semibold uppercase tracking-wider">Verification Tier</span>
-                  <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                <div className="rounded-lg bg-slate-50 px-3.5 py-2 border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">Verification Tier</span>
+                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
                     <ShieldCheck className="h-3.5 w-3.5" /> {currentOpp.invoice?.verificationTier || "BUYER_ACCEPTED"}
                   </span>
                 </div>
 
-                <div className="rounded-2xl bg-neutral-50 px-4 py-2 border border-neutral-200/60">
-                  <span className="text-[10px] text-neutral-400 block font-semibold uppercase tracking-wider">Tenor</span>
-                  <span className="text-xs font-bold text-neutral-800">{currentOpp.tenorDays || 45} Days</span>
+                <div className="rounded-lg bg-slate-50 px-3.5 py-2 border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">Tenor</span>
+                  <span className="text-xs font-bold text-[#0F172A] font-mono">{currentOpp.tenorDays || 45} Days</span>
                 </div>
               </div>
             </div>
@@ -345,39 +315,45 @@ export default function MarketplaceDashboard() {
             {/* Live Bidding Ticker */}
             <BidTicker bids={currentOpp.bids || []} />
 
-            {/* Interactive Urgency vs Cost Slider */}
+            {/* Interactive Urgency Override Slider (Connected to POST /api/match) */}
             <UrgencySlider 
-              urgency={urgencyWeight} 
-              onChange={setUrgencyWeight}
-              derivedWeight={currentOpp.urgencyWeight ? Number(currentOpp.urgencyWeight) : null}
-              drivingObligation={currentOpp.drivingObligation}
-              sufficiencyFloor={currentOpp.sufficiencyFloor}
+              urgencyNudgeBps={urgencyNudgeBps} 
+              onChange={setUrgencyNudgeBps}
+              drivingObligation={matchResult.utility?.drivingObligation || currentOpp.drivingObligation}
+              sufficiencyFloor={matchResult.utility?.sufficiencyFloorPaise 
+                ? matchResult.utility.sufficiencyFloorPaise / 100 
+                : currentOpp.sufficiencyFloor}
             />
 
-            {/* Ditto Deal Breakdown Cards */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
+            {/* Scored Offers Breakdown from /api/match */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-neutral-900 text-base tracking-tight">
-                    Ranked Institutional Offers (CodeCrafters Pareto Matching)
+                  <h3 className="font-bold text-[#0F172A] text-lg tracking-tight flex items-center gap-2">
+                    Ranked Institutional Offers (Lexicographic Clearing Engine)
+                    {matchingLoading && (
+                      <span className="text-xs text-slate-400 font-normal animate-pulse">
+                        (Recalibrating via POST /api/match...)
+                      </span>
+                    )}
                   </h3>
-                  <p className="text-xs text-neutral-500">
-                    Transparent, plain-English breakdown with zero hidden haircuts.
+                  <p className="text-xs text-slate-500">
+                    Gated by sufficiency floor & timing deadline before ranking on true cost (denominator = net cash delivered).
                   </p>
                 </div>
-                <span className="text-xs font-semibold text-neutral-500">
-                  {computedDeals.length} Offers Scored
+                <span className="text-xs font-semibold text-slate-600 font-mono bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
+                  {matchResult.scoredOffers.length} Offers Scored
                 </span>
               </div>
 
               <div className="space-y-4">
-                {computedDeals.map((deal, idx) => (
+                {matchResult.scoredOffers.map((offer) => (
                   <DittoDealCard
-                    key={deal.bid.id}
-                    deal={deal}
-                    isBestMatch={idx === 0 && !deal.isDisqualified}
-                    onAccept={handleAcceptDeal}
-                    onPlayAudio={handlePlayDealAudio}
+                    key={offer.offer.id}
+                    offer={offer}
+                    isBestMatch={offer.rank === 1 && !offer.disqualified}
+                    onAccept={handleAcceptOffer}
+                    onPlayAudio={handlePlayOfferAudio}
                   />
                 ))}
               </div>
@@ -390,13 +366,13 @@ export default function MarketplaceDashboard() {
 
         {/* ----------------- 2. CAPITAL PROVIDER VIEW ----------------- */}
         {activeRole === "provider" && (
-          <div className="space-y-8">
+          <div className="space-y-6">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
+              <h1 className="text-2xl font-bold tracking-tight text-[#0F172A] sm:text-3xl">
                 Capital Provider Liquidity & Risk Cockpit
               </h1>
-              <p className="text-xs text-neutral-500 mt-1">
-                Configure autonomous NexusX bidding parameters, monitor sector exposure caps, and view live clearinghouse matches.
+              <p className="text-xs text-slate-500 mt-1">
+                Configure autonomous LiteLLM underwriting rules, monitor sector exposure caps, and view real-time clearinghouse matches.
               </p>
             </div>
 

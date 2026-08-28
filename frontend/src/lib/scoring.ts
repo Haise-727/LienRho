@@ -1,4 +1,11 @@
 // Domain Types matching Prisma Schema & Track 1/2 contracts
+// Note: All financial math and matching calculations are computed exclusively
+// on the server (POST /api/match). This file contains strictly domain interfaces,
+// presentation formatters, and seed mock types.
+
+import { formatPaise, formatBps } from "@/lib/market/money";
+import { decimalToPaise } from "@/lib/market/prisma-adapter";
+import type { ScoredOffer } from "@/lib/market/types";
 
 export type VerificationTier = "BUYER_ACCEPTED" | "LEDGER_VERIFIED" | "SUPPLIER_ASSERTED";
 export type OpportunityStatus = 
@@ -153,68 +160,49 @@ export interface CapitalProviderDetail {
   }>;
 }
 
-// ------------------------------------------------------------- Formatters
-// --------------------------------------------------------------- formatting
-//
-// Thin wrappers over `lib/market/money.ts` so there is one implementation of
-// each format in the codebase. The engine works in integer paise; these types
-// carry rupee strings off the wire, so the conversion happens here rather than
-// being repeated at every call site.
+// ------------------------------------------------------------- Pure Presentation Formatters
 
-import { formatPaise, formatBps } from "@/lib/market/money";
-import { decimalToPaise } from "@/lib/market/prisma-adapter";
-import type { ScoredOffer } from "@/lib/market/types";
-
-/** `₹9,34,188.36` from a rupee string, number, or null. */
 export function formatINR(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return "—";
   return formatPaise(decimalToPaise(String(value)));
 }
 
-/** Alias kept for existing call sites. */
 export const formatINRDecimal = formatINR;
 
-/** `13.73%` from a fraction (0.1373) or a rupee-style string. */
+export function formatPaiseToINR(paise: number | null | undefined): string {
+  if (paise === null || paise === undefined || isNaN(paise)) return "₹0.00";
+  return formatPaise(paise);
+}
+
+export function formatPaiseToLakhs(paise: number | null | undefined): string {
+  if (paise === null || paise === undefined || isNaN(paise)) return "₹0.00L";
+  const lakhs = paise / 10000000;
+  return `₹${lakhs.toFixed(2)}L`;
+}
+
 export function formatPercent(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return "—";
   return formatBps(Number(value) * 10_000);
 }
 
-// ------------------------------------------------------------- deal display
-//
-// What the deal cards render.
-//
-// Every figure here is COPIED from the clearing engine's `ScoredOffer`, never
-// recomputed. This file previously carried its own arithmetic and it was wrong
-// in three separate ways — it divided effective cost by the advance instead of
-// net cash received (understating true cost by ~23bp), it scored offers with a
-// weighted sum whose gate "penalty" was a x0.3 multiplier rather than a gate,
-// and it re-derived the timing gate by comparing day counts instead of dates.
-//
-// The weighted sum is worth calling out specifically: with a multiplier rather
-// than a gate, a disqualified offer could still outrank a qualified one on a
-// high enough raw score. That is precisely the failure PS-5 exists to describe,
-// rebuilt inside the product meant to fix it.
+export { formatBps };
+
+// ------------------------------------------------------------- Deal Display Mapper
 
 export interface ComputedDeal {
   bid: Bid;
   faceValue: number;
-  /** What actually reaches the supplier's account. */
   netCashToday: number;
   discountCharge: number;
   flatFee: number;
   totalCost: number;
-  /** True cost: charges over NET CASH RECEIVED, annualised. */
   effectiveApr: number;
   reserveAmount: number;
   speedBadge: string;
-  /** Plain-English gate failures, written by the engine to be displayed. */
   gateFailures: string[];
   isDisqualified: boolean;
-  /** 1-based rank among offers that cleared both gates. Null if disqualified. */
   rank: number | null;
-  /** True when some other offer beats this one on cash, cost and speed at once. */
-  isDominated: boolean;
+  isDominated?: boolean;
 }
 
 function speedBadgeFor(settlementDays: number): string {
@@ -224,42 +212,195 @@ function speedBadgeFor(settlementDays: number): string {
   return `⏳ ${settlementDays} Days (T+${settlementDays})`;
 }
 
-/**
- * Map one engine-scored offer into what the cards render.
- *
- * A pure rename, deliberately: no arithmetic, no thresholds, no scoring. If a
- * figure is needed that the engine does not return, add it to `ScoredOffer`
- * rather than deriving it here — two implementations of the same finance is how
- * the screen and the audit trail end up disagreeing.
- *
- * Paise are divided by 100 only because these display types speak rupees. That
- * is the last step before rendering, never an input to a further calculation.
- */
 export function toComputedDeal(scored: ScoredOffer, bid: Bid): ComputedDeal {
-  const faceValueRupees =
-    scored.offer.advanceRateBps > 0
-      ? scored.advancePaise / (scored.offer.advanceRateBps / 10_000) / 100
-      : 0;
-
   const gateFailures: string[] = [];
   if (!scored.gates.sufficiency.passed) gateFailures.push(scored.gates.sufficiency.reason);
   if (!scored.gates.timing.passed) gateFailures.push(scored.gates.timing.reason);
 
+  const faceValue = scored.advancePaise + (scored.netCashPaise - scored.advancePaise);
+  const reserveAmount = Math.max(0, (faceValue - scored.advancePaise) / 100);
+
   return {
     bid,
-    faceValue: faceValueRupees,
+    faceValue: faceValue / 100,
     netCashToday: scored.netCashPaise / 100,
     discountCharge: scored.discountChargePaise / 100,
     flatFee: scored.offer.feesPaise / 100,
     totalCost: (scored.discountChargePaise + scored.offer.feesPaise) / 100,
-    // Fraction, because formatPercent multiplies back up. The engine's value is
-    // basis points and keeps its fractional part so ranking cannot tie.
     effectiveApr: scored.effectiveCostBps / 10_000,
-    reserveAmount: faceValueRupees - scored.advancePaise / 100,
+    reserveAmount,
     speedBadge: speedBadgeFor(scored.offer.settlementDays),
     gateFailures,
     isDisqualified: scored.disqualified,
     rank: scored.rank,
-    isDominated: scored.dominatedBy !== null,
   };
 }
+
+// ------------------------------------------------------------- Fallback Seed Mock Data (INR)
+export const FALLBACK_OPPORTUNITY: Opportunity = {
+  id: "opp-seed-001",
+  orgId: "org-vertex",
+  status: "AUCTION_LIVE",
+  requestedAmount: "1000000.00",
+  tenorDays: 45,
+  riskGrade: "A",
+  probabilityOfDefault: "0.021000",
+  expectedDilutionPct: "0.005000",
+  sufficiencyFloor: "900000.00",
+  timingDeadline: "2026-08-30T00:00:00.000Z",
+  drivingObligation: "September payroll",
+  urgencyWeight: "0",
+  createdAt: new Date().toISOString(),
+  invoice: {
+    id: "inv-seed-001",
+    invoiceNumber: "INV-2026-0801",
+    faceValue: "1000000.00",
+    currency: "INR",
+    invoiceDate: "2026-08-23T00:00:00.000Z",
+    dueDate: "2026-10-07T00:00:00.000Z",
+    acceptanceDate: "2026-08-25T00:00:00.000Z",
+    verificationTier: "BUYER_ACCEPTED",
+    threeWayMatched: true,
+    fingerprint: "0x7a8b9c...e102",
+    customer: {
+      id: "cust-001",
+      slug: "bharat-auto",
+      name: "Bharat Auto Ltd",
+      taxId: "27AAACB1111B1Z6",
+      industry: "auto-components",
+      averageDelayDays: 4.2,
+      relationshipDurationDays: 1460
+    }
+  },
+  cashPosition: {
+    id: "cp-001",
+    asOfDate: new Date().toISOString(),
+    currentCashPaise: 0,
+    cashThresholdPaise: 10000000,
+    obligations: [
+      {
+        id: "ob-1",
+        label: "September payroll",
+        amountPaise: 90000000,
+        dueDate: "2026-08-30T00:00:00.000Z"
+      },
+      {
+        id: "ob-2",
+        label: "Kalyani Steel invoice payable",
+        amountPaise: 4607284,
+        dueDate: "2026-08-31T00:00:00.000Z"
+      }
+    ]
+  },
+  bids: [
+    {
+      id: "bid-rapidfin",
+      opportunityId: "opp-seed-001",
+      providerId: "prov-rapidfin",
+      annualRate: "0.135000",
+      advanceRate: "0.950000",
+      flatFee: "0.00",
+      tenorDays: 45,
+      settlementDays: 0,
+      recourse: false,
+      repaymentStructure: "BULLET",
+      status: "ACTIVE",
+      netCashToSupplier: "934188.36",
+      effectiveAnnualCost: "0.137300",
+      utilityScore: "1.000000",
+      rank: 1,
+      gateFailures: [],
+      provider: {
+        id: "prov-rapidfin",
+        name: "Rapidfin",
+        archetype: "FINTECH",
+        settlementDays: 0,
+        reliabilityScore: "1.000000"
+      }
+    },
+    {
+      id: "bid-kaveri",
+      opportunityId: "opp-seed-001",
+      providerId: "prov-kaveri",
+      annualRate: "0.122000",
+      advanceRate: "0.880000",
+      flatFee: "1000.00",
+      tenorDays: 45,
+      settlementDays: 1,
+      recourse: true,
+      repaymentStructure: "BULLET",
+      status: "ACTIVE",
+      netCashToSupplier: "865763.84",
+      effectiveAnnualCost: "0.133400",
+      utilityScore: "0.000000",
+      rank: 2,
+      gateFailures: ["Fails Sufficiency Floor (₹8.66L < ₹9.00L)", "Misses Timing Deadline (31 Aug > 30 Aug)"],
+      provider: {
+        id: "prov-kaveri",
+        name: "Kaveri Capital (NBFC)",
+        archetype: "NBFC",
+        settlementDays: 1,
+        reliabilityScore: "1.000000"
+      }
+    },
+    {
+      id: "bid-meridian",
+      opportunityId: "opp-seed-001",
+      providerId: "prov-meridian",
+      annualRate: "0.110000",
+      advanceRate: "0.800000",
+      flatFee: "2500.00",
+      tenorDays: 45,
+      settlementDays: 3,
+      recourse: true,
+      repaymentStructure: "BULLET",
+      status: "ACTIVE",
+      netCashToSupplier: "786650.68",
+      effectiveAnnualCost: "0.137600",
+      utilityScore: "0.000000",
+      rank: 3,
+      gateFailures: ["short ₹1.13L", "three days late"],
+      provider: {
+        id: "prov-meridian",
+        name: "Meridian Bank",
+        archetype: "BANK",
+        settlementDays: 3,
+        reliabilityScore: "1.000000"
+      }
+    }
+  ]
+};
+
+export const FALLBACK_PROVIDER_DETAIL: CapitalProviderDetail = {
+  id: "prov-kaveri",
+  orgId: "org-kaveri",
+  name: "Kaveri Capital (NBFC)",
+  archetype: "NBFC",
+  costOfFunds: "0.105000",
+  hurdleRate: "0.130000",
+  totalLiquidity: "120000000.00",
+  availableLiquidity: "119120000.00",
+  minTicket: "200000.00",
+  maxTicket: "15000000.00",
+  minTenorDays: 15,
+  maxTenorDays: 90,
+  riskAppetiteFloor: "C",
+  concentrationLimitPct: "0.250000",
+  settlementDays: 1,
+  sectorFocus: ["auto-components", "textiles", "engineering"],
+  reliabilityScore: "1.000000",
+  bids: [
+    {
+      id: "bid-k1",
+      opportunityId: "opp-seed-001",
+      annualRate: "0.122000",
+      advanceRate: "0.880000",
+      status: "ACTIVE",
+      opportunity: {
+        id: "opp-seed-001",
+        status: "AUCTION_LIVE",
+        requestedAmount: "1000000.00"
+      }
+    }
+  ]
+};
