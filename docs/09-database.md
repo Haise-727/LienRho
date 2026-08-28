@@ -7,6 +7,10 @@ Written to be read by a person joining the project and by an AI agent working
 in the repo. Every invariant is stated explicitly rather than left implicit in
 the code, and every non-obvious design decision carries its reason.
 
+> **Read §12 before deploying anything.** There are no user accounts and no
+> access control in this database — a working login screen exists, which makes
+> that easy to miss.
+
 - **Schema source of truth:** [`frontend/prisma/schema.prisma`](../frontend/prisma/schema.prisma)
 - **Seed / demo fixture:** [`frontend/prisma/seed.ts`](../frontend/prisma/seed.ts)
 - **Ledger engine:** [`frontend/src/lib/ledger/`](../frontend/src/lib/ledger/)
@@ -44,6 +48,10 @@ Stated so nobody assumes otherwise: real bank connectivity, KYC/KYB, actual
 disbursement rails, credit bureau data, GST/e-invoice verification against the
 IRP, multi-currency, and tax. The `Invoice.verificationTier` field records a
 *claim* about verification quality; nothing performs the verification.
+
+**And, most consequentially: there are no user accounts and no access control
+in this database.** See §12 — it is the largest known gap and the one most
+likely to be mistaken for solved, because a working login screen exists.
 
 ---
 
@@ -137,6 +145,11 @@ A tenant. `type` is `SUPPLIER | PROVIDER | PLATFORM`.
 
 Party type lives on the org because **a provider must never see another
 provider's mandate or bids.** That is a tenancy rule, not a UI concern.
+
+⚠️ **This rule is currently a design intent, not an enforced guarantee.** No
+API route resolves a caller to an `Organization`, so nothing checks *who is
+asking*. `GET /api/providers` hides mandate internals by projection, which
+protects the fields but not the tenancy. See §12.
 
 ### `Customer`
 
@@ -377,7 +390,7 @@ to the two events the marketplace must get right: **Day 0 disbursement** and
 
 | Model | Holds |
 |---|---|
-| `Account` | Chart of accounts. `code` is the stable handle; `type` is `ASSET \| LIABILITY \| EQUITY \| REVENUE \| EXPENSE` |
+| `Account` | Chart of accounts. `code` is the stable handle; `type` is `ASSET \| LIABILITY \| EQUITY \| REVENUE \| EXPENSE`. **Not a user account** — see §12 |
 | `JournalEntry` | One balanced transaction. `reference` is **unique** — the idempotency key |
 | `Posting` | One leg. Amount always **positive**; `direction` (`DEBIT`/`CREDIT`) carries the sign |
 | `EscrowLock` | A hold on provider liquidity while a bid is live |
@@ -597,7 +610,7 @@ paths named here.
 | 4 | One invoice cannot be financed twice under one identifier | `Invoice.fingerprint` unique index |
 | 5 | One bid per provider per opportunity | `@@unique([opportunityId, providerId])` |
 | 6 | One live escrow hold per provider per opportunity | `@@unique([providerId, opportunityId])` |
-| 7 | The scorer never reads provider mandate internals | `GET /api/providers` projection; code review |
+| 7 | The scorer never reads provider mandate internals | `GET /api/providers` projection; code review. **Field-level only — caller identity is never checked (§12)** |
 | 8 | No LLM produces a financial figure | `quoteEconomics()` / `offer-math.ts` are the only sources |
 | 9 | `currentCashPaise` reconciles with the ledger cash account | Seed reads it back off the account |
 | 10 | Sufficiency and timing are gates, not weights | `scoreOffers()` |
@@ -638,7 +651,90 @@ CLI, because DDL cannot run through the pooler. See
 
 ---
 
-## 12. Reading order for the reasoning
+## 12. User accounts and access control — the known gap
+
+**There are no user accounts in this database, and no marketplace endpoint
+performs any authorization check.**
+
+This is documented at length rather than in a footnote because a working login
+screen exists, which makes the gap easy to mistake for solved.
+
+### What each layer actually does
+
+| Layer | State |
+|---|---|
+| **Prisma schema (this database)** | No `User`, `Session`, or credential model. No email, password hash, or token anywhere |
+| **Frontend** | Complete login UI — `/login`, an httpOnly session cookie (`lib/session.ts`), and a `proxy.ts` redirect gate on page routes |
+| **Legacy `backend/` (Python)** | The only real implementation: `User` + `Org` tables, PBKDF2-HMAC-SHA256 password hashing, JWT with a 12-hour TTL, and org-scoped query helpers |
+
+`POST /api/auth/login` proxies to `${NEXT_PUBLIC_API_URL}/auth/login` — FastAPI
+on `:8000`, the deprecated backend the marketplace no longer runs. **If that
+service is not up, nobody can log in at all.** The login screen is orphaned
+relative to the current stack.
+
+### Every marketplace route is unauthenticated
+
+None of `/api/opportunities`, `/api/providers`, `/api/match`,
+`/api/ledger/entries`, `/api/ledger/trial-balance` or `/api/db-health` reads the
+session cookie or resolves a caller to an `Organization`.
+
+The page-route gate explicitly excludes the API:
+
+```ts
+// frontend/src/proxy.ts
+matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"]
+```
+
+That exclusion was **correct in the original design** — FastAPI validated the
+JWT itself, so the proxy only needed to stop a page rendering and then failing
+to fetch. It stopped being correct when the new API routes replaced FastAPI
+without inheriting its auth. The gate was never wrong; the thing behind it
+changed.
+
+Consequence: anyone who can reach the server can read the entire ledger, every
+opportunity, and every bid.
+
+### `Account` is not a user account
+
+`model Account` is the **ledger** chart of accounts —
+`provider:rapidfin:cash`, `platform:escrow_payable`. It has no relationship to
+authentication. Anyone grepping for `Account` expecting to find auth will find
+the wrong table, and an agent asked to "add a field to the account model" could
+plausibly modify the ledger. Named here so that cannot happen quietly.
+
+### Why it is like this
+
+A deliberate scope decision, recorded in issue #1: *"we are not building full
+production auth or full real-world lending logic — we are scaffolding the
+Prisma schema, building the mock data, and setting up the core ledger tables to
+prove the concept."* For a local demo over synthetic data that is a reasonable
+trade.
+
+### What follows from it
+
+1. **Do not deploy this publicly as-is.** The Sprint 2 plan
+   ([`08-aws-migration-plan.md`](08-aws-migration-plan.md)) puts the app behind
+   a public ALB on Fargate. If that happens before auth exists, the ledger is
+   world-readable. Auth is a prerequisite for that phase, not a follow-up.
+2. **Multi-tenancy is unenforced.** `Organization.type` exists and provider
+   mandates are hidden by projection, but nothing verifies the caller. Treat
+   invariant #7 as field-level hygiene, not isolation.
+3. **The Python backend is still load-bearing for login only.** Dropping
+   `backend/` entirely requires replacing auth first.
+
+### The smallest honest fix
+
+A `User` model in Prisma (id, email unique, passwordHash, `orgId` → `Organization`),
+plus one shared `requireSession()` helper that resolves the cookie to an
+`orgId` and scopes every query by it. Roughly 60 lines. It would also sever the
+last dependency on the Python backend.
+
+Not in Track 1's assigned scope, so it is recorded here rather than silently
+built.
+
+---
+
+## 13. Reading order for the reasoning
 
 Every design decision here traces to an analysis document:
 
