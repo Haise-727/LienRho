@@ -1,5 +1,4 @@
-﻿from pydantic import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+﻿from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class NexusSettings(BaseSettings):
@@ -20,12 +19,6 @@ class NexusSettings(BaseSettings):
     matching_url: str | None = None
     matching_timeout: float = 5.0
     matching_api_key: str | None = None
-
-    # Observability (Langfuse; off by default -- SDK is optional and lazy-imported)
-    langfuse_enabled: bool = False
-    langfuse_host: str = "http://localhost:3000"
-    langfuse_public_key: SecretStr | None = None
-    langfuse_secret_key: SecretStr | None = None
 
 
 def get_settings() -> NexusSettings:

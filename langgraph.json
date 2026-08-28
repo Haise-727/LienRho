@@ -1,7 +1,0 @@
-﻿{
-  "dependencies": [],
-  "graphs": {
-    "nexus_clearing": "./ai/nexus/agents/market_clearing_agent.py:clearing_workflow"
-  },
-  "env": ".env"
-}
