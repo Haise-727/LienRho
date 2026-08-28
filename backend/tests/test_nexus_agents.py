@@ -125,3 +125,25 @@ def test_http_matching_client_maps_response(monkeypatch):
     assert result.matched_bid_ref == "P"
     assert result.score == 0.9
     assert result.simulated is False
+
+
+def test_provider_fees_are_in_paise():
+    """Guards #17: every fee was ten times too large.
+
+    A rupee is 100 paise, and `2_500_000` reads as "2,500" at a glance — which
+    is how a fee of Rs 25,000 on a Rs 1,00,000 invoice survived review. Fees
+    feed effective cost directly, so the wrong constant mis-priced every
+    agent-generated bid while still looking plausible.
+
+    The bound is deliberately a sanity range rather than exact values: pinning
+    the literals would make this test a copy of the data it is checking, and it
+    would pass for any typo the author also made in the test.
+    """
+    expected = {"L1": 2_500 * 100, "L2": 1_800 * 100, "L3": 3_000 * 100}
+    for profile in DEFAULT_PROVIDERS:
+        assert profile.fees_paise == expected[profile.provider_id]
+        rupees = profile.fees_paise / 100
+        assert 500 <= rupees <= 10_000, (
+            f"{profile.provider_name} fee of Rs {rupees:,.0f} is outside any "
+            f"plausible flat fee — likely a paise/rupee confusion"
+        )
