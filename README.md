@@ -291,6 +291,8 @@ worth your time:
   regulatory reality
 - [`03-system-design.md`](docs/03-system-design.md) — architecture, agents, the
   full opportunity lifecycle
+- [`09-database.md`](docs/09-database.md) — the data model in full: every table,
+  the money conventions, the double-entry ledger mechanics, and the invariants
 
 Track 1's integration guide lives at
 [`frontend/prisma/README.md`](frontend/prisma/README.md).
