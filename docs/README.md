@@ -26,6 +26,17 @@ Written to be read in order. Each one answers a specific question.
 
 | Doc | What it answers |
 |---|---|
+## Start here for the submission
+
+| Document | What it is |
+|---|---|
+| [`final/00-README.md`](final/00-README.md) | **The claim, the thirty-second version, and verified state** |
+| [`final/01-requirements-coverage.md`](final/01-requirements-coverage.md) | Every PS-5 requirement mapped to a file or a measured figure — including what we did not build |
+| [`final/02-demo-script.md`](final/02-demo-script.md) | Four-minute demo, and answers to the questions you will be asked |
+| [`final/03-architecture.md`](final/03-architecture.md) | What runs and where, with limitations named |
+
+---
+
 | [`00-brief.md`](00-brief.md) | What this product is, why it's a two-sided market problem, and the one-line thesis |
 | [`01-commerce-analysis.md`](01-commerce-analysis.md) | The commercial reality — offer anatomy, supplier utility, provider mandates, market design, information asymmetry, regulation |
 | [`02-carryover-audit.md`](02-carryover-audit.md) | What transferred from the earlier receivables build, what died, what was new construction |
@@ -36,7 +47,7 @@ Written to be read in order. Each one answers a specific question.
 | [`07-file-ownership.md`](07-file-ownership.md) | Who works where — the map that keeps four people out of each other's diffs |
 | [`08-aws-migration-plan.md`](08-aws-migration-plan.md) | Sprint 2: Supabase → Aurora, ECS Fargate, ElastiCache |
 | [`09-database.md`](09-database.md) | **The data model in full** — every table, the money conventions, the ledger mechanics, invariants, and query recipes |
-| [`12-supabase-to-aws.md`](12-supabase-to-aws.md) | **Migrating off Supabase** — what Aurora replaces and what it doesn't, the auth decision, and the blocker that isn't infrastructure |
+| [`14-supabase-to-aws.md`](14-supabase-to-aws.md) | **Migrating off Supabase** — what Aurora replaces and what it doesn't, the auth decision, and the blocker that isn't infrastructure |
 | [`future_sprint_plan_v2.md`](future_sprint_plan_v2.md) | **Future Sprint Plan (v2)** — Gap analysis, auth, multi-agent architecture, frontend redesign, and AWS CI/CD timeline |
 
 ---
