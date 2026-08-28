@@ -64,7 +64,7 @@ The existing `.github/workflows/ci.yml` still gates PR merges (lint, tsc, test, 
 | Path | Purpose |
 |---|---|
 | `amplify.yml` | Amplify build spec (install, generate, migrate, build) |
-| `docs/aws-architecture.md` | This file |
+| `docs/15-aws-architecture.md` | This file |
 | `frontend/next.config.ts` | Reverted to default (no standalone) |
 
 ## Migration (from local dev)

@@ -1,298 +1,248 @@
-# LienRho
+<div align="center">
 
-**An agentic capital marketplace for supply-chain working capital.**
-CSI ORIGIN 2026 · Problem Statement 5
+# ⚖️ LIENRHO
 
-[![CI](https://github.com/Haise-727/LienRho/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Haise-727/LienRho/actions/workflows/ci.yml?query=branch%3Amain)
-![Next.js](https://img.shields.io/badge/Next.js-16-black)
-![Prisma](https://img.shields.io/badge/Prisma-7-2D3748)
-![Postgres](https://img.shields.io/badge/PostgreSQL-16-336791)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
+### A competitive capital market for supply-chain working capital
 
-A supplier holding a verified invoice shouldn't have to call one bank. LienRho
-turns that invoice into a live opportunity, lets multiple capital providers
-compete to fund it, and picks the winner by what the offer is **actually worth
-to that supplier right now** — not by whose interest rate looks smallest.
+**The cheapest offer is not the best offer.**
+Every marketplace ranks financing by rate.
+LIENRHO asks whether the money actually solves the problem.
 
----
+![next.js](https://img.shields.io/badge/next.js-16-000000?logo=nextdotjs&logoColor=white)
+![react](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)
+![typescript](https://img.shields.io/badge/typescript-5-3178C6?logo=typescript&logoColor=white)
+![postgres](https://img.shields.io/badge/postgres-16-4169E1?logo=postgresql&logoColor=white)
+![prisma](https://img.shields.io/badge/prisma-7-2D3748?logo=prisma&logoColor=white)
+![python](https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white)
+![agents](https://img.shields.io/badge/agents-LangGraph-1C3C3C)
+![llm](https://img.shields.io/badge/llm-LiteLLM-6B46C1)
 
-## The thesis
+[Quickstart](#quickstart) · [The Problem](#the-problem) · [How It Works](#what-lienrho-does) · [The Numbers](#the-numbers) · [Architecture](#architecture) · [Scope](#scope) · [Docs](#requirements--design-docs)
 
-> The cheapest offer is frequently not the best offer, and a marketplace that
-> ranks on headline rate quietly destroys value for suppliers.
+**CSI ORIGIN 2026 · Problem Statement 5**
 
-One invoice: **₹10,00,000**, 45-day tenor. Two offers.
-
-| | Meridian Bank | Rapidfin |
-|---|---|---|
-| Headline rate | **11.0%** | 13.5% |
-| Advance rate | 80% | **95%** |
-| Fee | ₹2,500 | **₹0** |
-| Settlement | T+3 | **T+0** |
-| **Cash in hand** | ₹7,86,650.68 | **₹9,34,188.36** |
-| **Effective annual cost** | 13.76% | **13.73%** |
-
-The 13.5% offer delivers **₹1,47,537.68 more cash, three days sooner — and is
-effectively cheaper.** The 2.5-point headline advantage is entirely erased by
-the lower advance rate and the flat fee.
-
-A marketplace that sorts on rate doesn't give an incomplete answer here. It
-gives the **wrong** one, confidently.
-
-This is not a slide. It is [an executable test](frontend/src/lib/market/offer-math.test.ts)
-with the figures transcribed from the analysis rather than from a previous run,
-and it is seeded into the demo database. `npm test` proves it.
+</div>
 
 ---
 
-## The part most teams get wrong
+A supplier with an accepted invoice presents it to a market. Banks, NBFCs, funds and fintechs compete to finance it. LIENRHO decides which offer is genuinely best **for that supplier's actual situation** — then clears the trade against a double-entry ledger.
 
-Ranking by "overall suitability" needs to know what this supplier values
-*today*. The naive answers are both bad: fixed weights are wrong for everyone,
-and asking a supplier to self-report that they value settlement speed at 0.3
-produces noise dressed as data.
+> Given a verified invoice, four competing offers, and what this supplier actually needs — which financing outcome is right, and can we defend the answer?
 
-**So we don't ask. We read their cash position.**
+It is **not** a loan-comparison site. The problem statement is explicit that displaying competing offers does not solve the problem, because *"the most attractive financing option for a supplier may not be the offer with the lowest interest rate."*
 
-The platform ingests dated obligations from the supplier's ledger — payroll on
-Friday, a steel invoice the same day — and derives two things:
-
-- a **sufficiency floor**: the cash that actually solves the problem
-- a **timing deadline**: the date it has to land by
-
-These are **gates, not weights**. An offer failing either is *disqualified*,
-not ranked lower. Cost only ranks the survivors.
-
-Why that matters, from the seeded demo:
-
-| Provider | Net cash | Settles | Effective cost | Outcome |
-|---|---|---|---|---|
-| Meridian Bank | ₹7,86,650.68 | T+3 | 13.76% | fails sufficiency **and** timing |
-| Kaveri Capital | ₹8,65,763.84 | T+1 | **13.34%** | fails sufficiency |
-| Rapidfin | ₹9,34,188.36 | T+0 | 13.73% | **clears both gates — wins** |
-
-Kaveri is the **cheapest offer in the market** and it still loses, because it
-delivers ₹8.65L against a ₹9,00,000 floor. A weighted score ranks it first. A
-lexicographic gate says plainly: *this doesn't cover what you need.*
-
-The system can also return **`NO_ACCEPTABLE_OFFER`**. A second seeded supplier
-owes ₹21,00,000 in three days against a ₹22,00,000 invoice; nothing clears, and
-the correct answer is "do not finance", not "here is the least bad option". A
-market that always transacts is not exercising judgement.
-
----
+> **Status: working end to end.** Live against Postgres — invoices ingest through a real Tally parser, four provider archetypes bid, the engine gates and ranks, allocation re-checks capacity atomically, and settlement posts balanced journal entries. Verified: `tsc` clean · 36 frontend tests · 343 backend tests · build compiles · ledger balances.
+> Providers bid **fixed archetype terms** rather than pricing each invoice, and the learning loop is not built. Both are stated plainly in [`docs/final/01-requirements-coverage.md`](docs/final/01-requirements-coverage.md).
 
 ## Quickstart
 
 ```bash
-git clone https://github.com/Haise-727/LienRho && cd LienRho
-
-# 1. Database — either the shared Supabase instance or a local one
-docker compose up -d                     # Postgres :5432 + Redis :6379
-
-# 2. App
 cd frontend
-npm install                              # postinstall generates the Prisma client
-cp .env.example .env                     # then fill in DATABASE_URL / DIRECT_URL
-npm run db:push && npm run db:seed       # 13 tables, then the synthetic market
-npm run dev                              # http://localhost:3000
+cp .env.example .env      # fill in DATABASE_URL and DIRECT_URL
+npm install               # postinstall runs prisma generate
+npm run dev               # http://localhost:3000
 ```
 
-Verify it came up:
+`DATABASE_URL` uses port **6543** (pooler, runtime). `DIRECT_URL` uses **5432** (direct — DDL cannot run through the pooler).
+
+Walk the whole market from the API, in a terminal:
 
 ```bash
-curl localhost:3000/api/db-health
-# {"status":"ok","seeded":true,"ledgerBalanced":true, ...}
-
-npm test                                 # 18 tests, including the worked example
+./scripts/demo.sh
 ```
 
----
+Everything it prints is read live. Nothing is hardcoded.
 
-## What's in the box
+**Checks:**
 
-### Multi-attribute clearing
+```bash
+cd frontend && npx tsc --noEmit && npm test && npm run build
+cd backend  && uv run pytest -q
+```
 
-Deterministic scoring across advance rate, APR, fees, tenor and settlement
-speed, ranked against derived supplier utility. Every figure comes from a
-named function — [`offer-math.ts`](frontend/src/lib/market/offer-math.ts) in
-integer paise, [`money.ts`](frontend/src/lib/money.ts) in `Decimal` for the
-ledger.
+## The problem
 
-### A Stitch-style double-entry ledger
+A supplier holds a ₹10,00,000 invoice their buyer has already accepted. Payment lands in 45 days. Payroll is Friday.
 
-[Stitch](https://www.stitch.co/) provides *"a programmable double-entry ledger
-that records every movement of money in real time."* Ours models the two events
-that have to be right: **Day 0 disbursement** and **Day 90 buyer repayment**.
+Today they call one bank and take what that bank offers. Meanwhile banks, NBFCs and funds hold deployable capital and cannot see the opportunity. PS-5 calls this the structural mismatch — and notes that simply showing more offers does not fix it:
 
-One invariant, enforced rather than trusted: **every journal entry's postings
-sum to zero**, checked inside the transaction that writes them. Entries are
-immutable and keyed by a unique reference, so a retried disbursement returns
-the existing entry instead of posting twice.
+- The **11.0%** offer can be dearer than the **13.5%** one, once advance rate and fees are counted
+- An offer can be cheapest and still fail, if it delivers too little or arrives too late
+- Providers differ in liquidity, appetite, ticket size and concentration limits, so an offer that suits one supplier is unfundable for another
 
-`GET /api/ledger/trial-balance` returns **500, not 200**, if the books don't
-balance. A number you can't trust shouldn't arrive with a success code.
+The missing capability is a market that **assesses, gates, ranks and clears** — not one that sorts a list.
 
-### Graded verification, not a boolean
+## What LIENRHO does
 
-`BUYER_ACCEPTED` → `LEDGER_VERIFIED` → `SUPPLIER_ASSERTED`. Providers price the
-difference between these, and flattening them into a single "verified" flag
-destroys the information that keeps the market from unravelling toward its
-worst participants.
+```
+Verified invoice  (graded tier: buyer-accepted / ledger-verified / supplier-asserted)
+        │
+        ▼
+  Supplier utility  ← DERIVED from cash position, never asked for
+        │             cash on hand, dated obligations, buffer → floor + deadline
+        ▼
+  Provider bids  (four archetypes, each pricing from its own private mandate)
+        │
+        ▼
+  ┌─ SUFFICIENCY GATE ─ does it deliver enough?  ─┐
+  │                                               │  fail → DISQUALIFIED
+  └─ TIMING GATE ────── does it arrive in time? ──┘        with a readable reason
+        │
+        ▼
+  Effective-cost ranking  (charges ÷ NET CASH RECEIVED, annualised)
+        │
+        ▼
+  Allocation  (liquidity, min ticket, buyer concentration — re-read, not trusted)
+        │             no single provider big enough → syndicate across several
+        ▼
+  Atomic commit  (conditional update: two deals cannot draw the same rupees)
+        │
+        ▼
+  Double-entry settlement  (Day 0 advance + reserve → buyer pays → reserve releases)
+```
 
-### Anti-double-financing
+### The one rule the whole architecture is built around
 
-A unique `sha256(sellerTaxId, buyerTaxId, invoiceNumber)` on every invoice — a
-database constraint, not a service. It stops the same invoice being financed
-twice; a fabricated near-duplicate needs the 3-way match instead. The two
-checks are complementary, and we say which does what.
+**No language model computes a financial figure. Anywhere.**
 
-### Agents that judge, never compute
+A model chooses *posture* — aggressive, conservative, decline. Every rupee and every rate comes from a named deterministic function. `llm.complete()` returns `None` on any failure and **every** caller has a deterministic fallback: the market degrades, it never halts.
 
-Provider-side bidding, supplier advocacy and market clearing run as agents
-(`ai/nexus/`). **No language model produces a rupee or a rate.** The model
-chooses posture — aggressive, conservative, decline — and deterministic
-functions compute every number, with each call recorded.
+This protected a legal filing in a previous build. Here it protects priced capital and a settlement obligation, so the bar is higher — the audit trail *is* the product, and "the model said so" is not an audit trail.
 
----
+### The second rule: gates, not weights
+
+Sufficiency and timing **disqualify**. Cost ranks only what survives.
+
+A weighted score would let a cheap, slow, insufficient offer outrank one that actually makes payroll — which is precisely the failure PS-5 describes. An offer that cannot solve the supplier's problem is not *worse*; it is **out**.
+
+### The third rule: derived, not elicited
+
+Nobody can honestly report that they value settlement speed at 0.3. Elicited weights are noise dressed as data.
+
+We read the supplier's cash position — what is in the bank, what is owed and when, the buffer the business will not go below — and walk forward to the first breach. **That date is the deadline; the gap is the floor.**
+
+## The numbers
+
+The worked example, computed live:
+
+| | Meridian Bank | Rapidfin | Kaveri Capital |
+|---|---|---|---|
+| Headline rate | **11.0%** | 13.5% | 12.2% |
+| Advance rate | 80% | 95% | 88% |
+| Flat fee | ₹2,500 | ₹0 | ₹1,000 |
+| Settlement | T+3 | T+0 | T+1 |
+| **Cash to supplier** | ₹7,86,650.68 | **₹9,34,188.36** | ₹8,65,763.84 |
+| **True cost** | 13.76% | 13.73% | **13.34%** |
+| Outcome | short ₹1.13L, 3 days late | ✅ **MATCHED** | cheapest — still disqualified |
+
+**Kaveri is the cheapest offer in the market and it loses.** ₹8.66L against ₹9L needed, a day late. Any marketplace ranking by price recommends it. A weighted score ranks it *first*.
+
+### Measured across 5000 invoices, not one example
+
+| | 280 invoices | **5000 invoices** |
+|---|---|---|
+| Gates changed the winner vs price-ranking | 12.9% | **13.5%** |
+| Cheapest offer disqualified | 34.2% | **37.9%** |
+| No acceptable offer — *do not finance* | 21.3% | **24.4%** |
+| Median winning effective cost | 18.10% | 17.08% |
+
+The figures barely moved across an 18× sample increase. **One deal in eight goes to a different lender than price-ranking would pick.**
+
+```bash
+npx tsx scripts/corpus/analyse.ts
+```
 
 ## Architecture
 
+One Next.js deployable for UI and API, a Python agent package, and a retired FastAPI service kept for its Tally connector and test suite.
+
 ```
-LienRho/
-├─ frontend/              Next.js 16 full-stack — UI, API routes, Prisma, ledger
-│  ├─ prisma/             schema (13 models), migrations, seed
-│  └─ src/lib/
-│     ├─ ledger/          double-entry engine — postEntry(), Day 0 / Day 90 flows
-│     ├─ market/          scoring, gates, Pareto clearing (integer paise)
-│     └─ money.ts         Decimal economics for the ledger
-├─ ai/nexus/              NexusX multi-agent layer — supplier, lender, clearing
-├─ docs/                  analysis and design (start at docs/README.md)
-└─ backend/               ⚠️ legacy Python/FastAPI — superseded, see below
+Web Client (Next.js 16, React 19)
+  → LIENRHO API (Next.js route handlers)
+      lib/market/        — THE MATCHING ENGINE (pure, DB-free, 36 tests)
+        offer-math.ts      four formulas, one implementation
+        utility.ts         derives gates from the cash position
+        score.ts           lexicographic gates → cost ranking
+        pareto.ts          non-dominated frontier + degeneracy guard
+        allocate.ts        capacity, tickets, concentration, syndication
+        commit.ts          atomic allocation under one transaction
+      lib/ledger/        — double-entry posting
+      app/api/           — match · opportunities · providers · ledger · voice
+  → PostgreSQL (Supabase) — invoices, bids, matches, journal entries, escrow
+  ↕ ai/nexus/ (Python)   — LangGraph agents over LiteLLM; posture only
 ```
 
-**Stack:** Next.js 16 · React 19 · Prisma 7 · PostgreSQL (Supabase) · Redis ·
-Python agents · TypeScript throughout.
+**Money is integer paise. Rates are integer basis points.** The worked example turns on a **3 basis point** gap, and IEEE-754 drift across advance → discount → net → effective-cost is the same order of magnitude. A float would let rounding noise pick the winner.
 
-**Sponsors:** Stitch (double-entry ledger) · CodeCrafters (deterministic
-matching, Redis locks) · NexusX (multi-agent coordination) · ElevenLabs (voice).
+### The degeneracy guard — the check that caught our own bug
 
----
+If one offer beats every other on cash, cost **and** speed at once, the bid set is broken rather than the market competitive. No arithmetic test catches this, because every individual calculation is correct.
 
-## Honest status
+It fired immediately against our own generator: the fintech had the highest advance, no fee, instant settlement *and* a spread below the bank's — **210 of 279 opportunities flagged**. Not a market; a price list with one entry. After giving the fintech a convenience premium and providers minimum tickets, four-offer sets went from **71/274 degenerate to 0/257**.
 
-Judges deserve to know what's real. So:
+## Scope
 
-**Working and verified**
-- 13-model schema on Postgres, baseline migration, Aurora cutover path tested
-- Double-entry ledger, balanced across 42 postings (trial balance ₹91,00,70,750)
-- Supplier utility derived from real dated cash obligations
-- Multi-attribute scoring with lexicographic gates and `NO_ACCEPTABLE_OFFER`
-- 7 read routes + `POST /api/match`; 18 passing tests
+**Built:**
+- Graded invoice verification (three tiers, never a boolean) + anti-double-financing fingerprint
+- Supplier utility derived from cash position — sufficiency floor and timing deadline
+- Four provider archetypes bidding across rate, advance, fees, tenor, settlement, recourse
+- Lexicographic gates + effective-cost ranking, with `NO_ACCEPTABLE_OFFER` as a first-class outcome
+- Pareto frontier and degeneracy guard
+- Capacity-aware allocation with syndication and atomic commit
+- Stitch-style double-entry ledger, Day 0 through reserve release
+- LangGraph agents over LiteLLM; ElevenLabs voice surfaces
+- Tally XML ingestion through a real connector
 
-**Simulated, and labelled as such**
-- **No real money, no live provider integrations.** The capital market is
-  synthetic — 4 providers with differentiated mandates. Competitive invoice
-  discounting is regulated in India, and licensed TReDS platforms (RXIL,
-  M1xchange, Invoicemart) already run multi-financier bidding. We are not
-  claiming to have invented that.
-- Provider agents currently quote from fixed mandates rather than pricing each
-  invoice — a deliberate 2-hour simplification, tracked in [#19](../../issues/19).
+**Not built, deliberately:**
+- **Dynamic provider pricing** — bids are frozen archetype terms, not `PD × LGD × exposure` against a hurdle rate
+- **The learning loop** — `reliabilityScore` exists; nothing writes to it
+- **Real invoice data** — the corpus is synthetic; the *parser and engine* are real
+- **Proven concurrency** — the allocation guard is argued in tests, not exercised against concurrent Postgres transactions
 
-**In flight**
-- The home screen (`/`) still renders the previous product's collections queue
-  and expects the legacy `backend/` on :8000. The marketplace surface is the
-  API and the ledger. Track 4's replacement is in progress.
-- `backend/` is the earlier receivables-decisioning build. Its risk model and
-  cash forecast are the intellectual ancestors of the scoring here, but it is
-  **not** on the critical path and is not needed to run the marketplace.
+## Repository layout
 
----
+```
+.
+├── frontend/                    — Next.js app: UI + all API surface
+│   ├── prisma/
+│   │   ├── schema.prisma        — marketplace + ledger models
+│   │   └── seed.ts              — synthetic market, reproduces the worked example
+│   ├── scripts/seed-corpus.ts   — curated 48-opportunity board
+│   └── src/
+│       ├── app/api/             — match · opportunities · providers · ledger
+│       ├── app/dashboard/       — supplier and lender views
+│       ├── lib/market/          — the matching engine
+│       └── lib/ledger/          — double-entry posting
+├── ai/nexus/                    — LangGraph agents (supplier · lender · clearing)
+├── backend/                     — FastAPI: Tally connector, 343 tests
+│   └── app/connectors/tally/    — the real XML parser the corpus runs through
+├── scripts/
+│   ├── corpus/generate_tally.py — synthetic corpus as Tally XML
+│   ├── corpus/analyse.ts        — clears 5000 invoices, reports the statistics
+│   └── demo.sh                  — walks the market from the API
+└── docs/
+    ├── final/                   — submission: coverage, demo script, architecture
+    └── tracks/                  — per-track working notes
+```
 
-## What's actually novel
+## Requirements & design docs
 
-TReDS exists. So the claim has to be precise:
-
-| Claim | Why it holds |
+| Doc | Purpose |
 |---|---|
-| **Multi-attribute clearing, not a rate auction** | Existing platforms bid principally on rate. Scoring advance rate, fees, speed and tenor against *derived* supplier utility is a different mechanism |
-| **Utility inferred from real cash position** | We read dated obligations and derive urgency, instead of asking suppliers to self-report weights they cannot honestly quantify |
-| **`NO_ACCEPTABLE_OFFER` as a first-class outcome** | The system declines to transact when nothing clears the floor |
-| **Auditable determinism** | Every rupee traces to a named function, and the ledger balances or the endpoint fails |
+| [`docs/final/00-README.md`](docs/final/00-README.md) | **Start here** — the claim, the thirty-second version, verified state |
+| [`docs/final/01-requirements-coverage.md`](docs/final/01-requirements-coverage.md) | Every PS-5 requirement mapped to a file or a measured figure, including what we did not build |
+| [`docs/final/02-demo-script.md`](docs/final/02-demo-script.md) | Four-minute demo, and the questions you will be asked |
+| [`docs/01-commerce-analysis.md`](docs/01-commerce-analysis.md) | The commerce reasoning the engine implements — why effective cost, why gates |
+| [`docs/03-system-design.md`](docs/03-system-design.md) | Module-by-module design and the tool boundary |
+| [`docs/10-handoff.md`](docs/10-handoff.md) | Entry point for a new contributor: architecture, conventions, known traps |
+| [`docs/09-database.md`](docs/09-database.md) | Schema reference |
 
 ---
 
-## Problem Statement 5 — requirement traceability
+<div align="center">
 
-Every requirement from the brief, and where it lives in this repo.
+**Built for CSI ORIGIN 2026 · Problem Statement 5**
 
-| # | Requirement | Where | Status |
-|---|---|---|---|
-| **R1** | Verified invoices presented as financing opportunities to multiple eligible providers | `Invoice.verificationTier` (3 graded tiers) + `FinancingOpportunity`; `GET /api/opportunities` | ✅ |
-| **R2** | Intelligently match opportunities to providers on risk appetite, liquidity, capacity, supplier/buyer characteristics | `CapitalProvider` mandate (cost of funds, hurdle, ticket range, tenor, risk floor, concentration cap); `clearOpportunity()` | ✅ |
-| **R3** | Competing offers differing across rate, tenor, advance rate, fees, settlement speed, repayment structure | `Bid` carries all six; 4 differentiated provider archetypes produce a genuine Pareto frontier | ✅ |
-| **R4** | Evaluate on overall suitability, not lowest rate | `scoreOffers()` — lexicographic sufficiency/timing gates, then effective-cost ranking. **The cheapest offer loses in the seeded demo.** | ✅ |
-| **R5** | Account for information asymmetry, incomplete information, changing capital, differing risk | Graded verification tiers disclosed to providers; `probabilityOfDefault` + `expectedDilutionPct`; `EscrowLock` tracks capital as it moves | ✅ |
-| **R6** | Providers evaluate against risk-adjusted return requirements and portfolio constraints | `hurdleRate`, `costOfFunds`, `concentrationLimitPct`, `availableLiquidity`; mandates stay private from the scorer | ✅ |
-| **R7** | Complete workflow: verification → risk → discovery → offers → matching → financing → settlement → learning | 13-state `OpportunityStatus` machine; ledger posts Day 0 and Day 90; `Match` records quoted-vs-delivered | ✅ core; learning loop partial |
+*A market that always transacts is not exercising judgement.*
 
-**Annexure — agent autonomy.** Supplier, lender and market-clearing agents run
-in `ai/nexus/`. Human involvement is reserved for exceptions, as the annexure
-asks. The LLM chooses posture; deterministic functions compute every figure.
-
-**Annexure — settlement reliability.** A match is not complete because an offer
-was accepted. `Match` stores `quotedSettlementDays` against
-`actualDisbursalDate`, and `expectedBuyerPayment` against
-`actualBuyerPayment`, so a provider that quotes T+1 and delivers T+2 is
-measurable — the input the learning loop needs.
-
----
-
-## Team
-
-**Track-parallel build, four people, one sprint.**
-
-| Member | GitHub | Track |
-|---|---|---|
-| Ragav Hariharan | [@ragavhariharan](https://github.com/ragavhariharan) | **Track 1** — database, Prisma schema, Stitch double-entry ledger, API routes |
-| Harsha Sakamuri | [@Haise-727](https://github.com/Haise-727) | **Track 2** — CodeCrafters matching engine, lexicographic scoring, Redis locks |
-| Tharun | [@ConTresillo](https://github.com/ConTresillo) | **Track 3** — NexusX multi-agent layer, ElevenLabs voice |
-| Yuvaraj | [@YUVARAJ-R-ai](https://github.com/YUVARAJ-R-ai) | **Track 4** — frontend UI, infrastructure, AWS migration plan |
-
-Ownership boundaries are recorded in
-[`docs/07-file-ownership.md`](docs/07-file-ownership.md), which is how four
-people worked in one repo without colliding.
-
----
-
-## Engineering practice
-
-- **CI on every push and PR** — schema validation, typecheck, 18 tests, and a
-  production build with no database, proving nothing touches Postgres at build
-  time.
-- **Secret scanning** — CI fails if a `.env` is ever committed or a connection
-  string with an embedded password appears in tracked files.
-- **Dependency audit** — advisory, so a transitive dev-only advisory is visible
-  without blocking a merge.
-- **Migrations, not `db push`** — `prisma/migrations/0_init` is baselined and
-  `migrate deploy` is verified against an empty database, so the Aurora cutover
-  in [`docs/08-aws-migration-plan.md`](docs/08-aws-migration-plan.md) needs no
-  baselining work.
-
----
-
-## Docs
-
-[`docs/README.md`](docs/README.md) indexes everything in reading order. The two
-worth your time:
-
-- [`01-commerce-analysis.md`](docs/01-commerce-analysis.md) — how this market
-  actually works: the economics, the worked example, auction design, the
-  regulatory reality
-- [`03-system-design.md`](docs/03-system-design.md) — architecture, agents, the
-  full opportunity lifecycle
-- [`09-database.md`](docs/09-database.md) — the data model in full: every table,
-  the money conventions, the double-entry ledger mechanics, and the invariants
-
-Track 1's integration guide lives at
-[`frontend/prisma/README.md`](frontend/prisma/README.md).
+</div>
