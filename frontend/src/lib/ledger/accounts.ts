@@ -20,6 +20,8 @@ export const PLATFORM = {
   escrowCash: "platform:escrow_cash",
   /** The matching obligation to pay it onward. Escrow is never platform money. */
   escrowPayable: "platform:escrow_payable",
+  /** Counterparty for genesis funding, so opening balances balance. */
+  openingBalance: "platform:opening_balance",
 } as const;
 
 export const supplierAccounts = (slug: string) => ({
@@ -84,6 +86,7 @@ export const platformAccountSpecs: AccountSpec[] = [
   { code: PLATFORM.feeIncome, name: "Platform fee income", type: "REVENUE" },
   { code: PLATFORM.escrowCash, name: "Escrow cash", type: "ASSET" },
   { code: PLATFORM.escrowPayable, name: "Escrow payable", type: "LIABILITY" },
+  { code: PLATFORM.openingBalance, name: "Opening balance equity", type: "EQUITY" },
 ];
 
 export function supplierAccountSpecs(slug: string, name: string, orgId: string): AccountSpec[] {

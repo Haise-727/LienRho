@@ -33,6 +33,10 @@ enum OrgType {
 /// another provider's mandate or bids — that is a tenancy rule, not a UI one.
 model Organization {
   id        String   @id @default(cuid())
+  /// Stable readable handle. Ledger account codes are built from this
+  /// (`provider:meridian-bank:cash`), so a reseed keeps codes meaningful and
+  /// anything written against them keeps working.
+  slug      String   @unique
   name      String
   type      OrgType
   taxId     String?  @unique
@@ -52,6 +56,8 @@ model Organization {
 model Customer {
   id                       String  @id @default(cuid())
   orgId                    String
+  /// Readable handle for this buyer's ledger accounts (`buyer:bharat-auto:payable`).
+  slug                     String  @unique
   name                     String
   taxId                    String?
   industry                 String?
@@ -373,6 +379,9 @@ model Account {
 
 /// The economic events the ledger records.
 enum LedgerEventType {
+  /// Genesis funding. Opening balances have to come from somewhere, and in a
+  /// double-entry system that somewhere is an equity account.
+  OPENING_BALANCE
   /// Provider advances cash; supplier receives net of discount and fee.
   DISBURSEMENT
   /// Buyer settles the invoice into platform escrow.
