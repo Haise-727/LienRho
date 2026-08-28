@@ -46,8 +46,30 @@ development runs Postgres and Redis under Docker Compose.
 - **Multi-Attribute Utility / Pareto Matching Algorithm**
 - **Redis atomic distributed locking**
 
-### NexusX
-- **Autonomous multi-agent coordination** (Supplier, Lender, Market Clearing)
+### ~~NexusX~~ → LiteLLM — ✅ Changed
+- **Autonomous multi-agent coordination** (Supplier, Lender, Market Clearing),
+  on LangGraph, with model access through **LiteLLM**.
+
+**Decision:** NexusX is dropped as a sponsor integration. Model calls go through
+LiteLLM directly.
+
+Worth being clear that this is a **claims change, not an architecture change** —
+`ai/nexus/llm.py` already does `from litellm import completion` behind a single
+seam, so no agent logic moves. What changes is what we say we are using, and
+therefore what we have to be able to defend.
+
+Scope of the follow-through:
+- Doc and pitch language across `03-system-design.md`, `README.md` and the track
+  docs. Do this first; it is the part that affects the submission.
+- The `ai/nexus/` package name and `nexus` prefix appear in ~12 Python files.
+  Renaming is mechanical and purely cosmetic — it can wait, and should not block
+  anything.
+- Nothing in `frontend/` is affected beyond doc text.
+
+The discipline that made this layer sound is unchanged and stays: the model
+chooses posture, deterministic functions compute every number, and
+`llm.complete()` returns `None` on failure with a deterministic fallback at
+every call site.
 
 ---
 
