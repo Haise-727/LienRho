@@ -57,8 +57,8 @@ public endpoint. Note both endpoints: the writer, and RDS Proxy if you add one.
 interchangeable:
 
 ```bash
-DATABASE_URL="postgresql://<user>:<pw>@<proxy-or-writer>:5432/lienrho?schema=public"
-DIRECT_URL="postgresql://<user>:<pw>@<writer>:5432/lienrho?schema=public"
+DATABASE_URL="postgresql://<user>:<password>@<proxy-or-writer>:5432/lienrho?schema=public"
+DIRECT_URL="postgresql://<user>:<password>@<writer>:5432/lienrho?schema=public"
 ```
 
 On Supabase these differ by port (6543 pooled, 5432 direct) because Supavisor
