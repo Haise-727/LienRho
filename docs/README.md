@@ -20,8 +20,8 @@ brief.
 ## Decisions made so far (see `05-decisions-needed.md` for the reasoning)
 
 - **Name:** staying **LienRho**.
-- **Infra:** deferred. Local/deterministic (FastAPI + Postgres + Docker Compose) until the core marketplace logic works — no AWS commitment yet.
-- **Sponsor integrations** (ElevenLabs, Stitch, CodeCrafters, NexusX): deferred until phases 0–3 of `04-build-plan.md` are solid. Note: what Stitch and NexusX's products actually *are* is still unconfirmed — don't design around either guess yet.
+- **Infra:** Next.js Full-Stack + Prisma ORM + Redis. UI features a major light background, Apple-style marketing aesthetic.
+- **Sponsor integrations:** ALL SPONSORS (ElevenLabs, Stitch, CodeCrafters, NexusX) are CORE to Phase 1 MVP. We are fully integrating the Stitch Ledger, ElevenLabs Voice AI, CodeCrafters Pareto matching, and NexusX agents.
 
 ## The honest framing
 
