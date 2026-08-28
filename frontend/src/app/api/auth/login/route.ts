@@ -3,25 +3,34 @@ import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const email = body.email || "supplier@acme.corp";
+  const email = (body.email || "supplier@vertex.corp").toLowerCase();
   
-  // Mock login fallback: works immediately without needing a database connection
-  const mockToken = "mock_jwt_token_" + Buffer.from(email).toString("base64");
+  let orgType = "SUPPLIER";
+  let orgSlug = "vertex-components";
+  let displayName = "Vertex Components Pvt Ltd";
+
+  if (email.includes("meridian") || email.includes("bank")) {
+    orgType = "PROVIDER";
+    orgSlug = "meridian-bank";
+    displayName = "Meridian Bank";
+  } else if (email.includes("rapidfin") || email.includes("fintech")) {
+    orgType = "PROVIDER";
+    orgSlug = "rapidfin";
+    displayName = "Rapidfin";
+  } else if (email.includes("kaveri") || email.includes("nbfc") || email.includes("lender")) {
+    orgType = "PROVIDER";
+    orgSlug = "kaveri-capital";
+    displayName = "Kaveri Capital (NBFC)";
+  }
+
+  const mockToken = "lienrho_jwt_" + Buffer.from(`${email}:${orgType}:${orgSlug}`).toString("base64");
   
   const response = NextResponse.json({
     ok: true,
-    orgId: "org-demo-001",
-    email: email,
-    displayName: email.includes("alpha") 
-      ? "Alpha Bank Capital" 
-      : email.includes("metro") 
-      ? "Metro Retail Enterprise" 
-      : "Acme Industrial Supplier",
-    role: email.includes("alpha") 
-      ? "provider" 
-      : email.includes("metro") 
-      ? "buyer" 
-      : "supplier"
+    orgType,
+    orgSlug,
+    email,
+    displayName
   });
 
   response.cookies.set(SESSION_COOKIE, mockToken, sessionCookieOptions);

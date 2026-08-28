@@ -2,13 +2,13 @@
 
 import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Sparkles, ArrowRight, ShieldCheck, Lock, Building2, Store, Landmark } from "lucide-react";
+import { ArrowRight, ShieldCheck, Lock, Building2, Store, Landmark, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("supplier@acme.corp");
+  const [email, setEmail] = useState("supplier@vertex.corp");
   const [password, setPassword] = useState("password123");
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,43 +50,66 @@ function LoginForm() {
         </p>
       </div>
 
-      {/* Quick 1-Click Demo Persona Switchers */}
-      <div className="mb-6 space-y-2">
+      {/* Quick 1-Click Demo Personas */}
+      <div className="mb-6 space-y-2.5">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 block text-center">
-          1-Click Demo Personas (No DB Required)
+          1-Click Seeded Personas
         </span>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2.5">
           <button
             type="button"
-            onClick={() => handleLogin("supplier@acme.corp")}
+            onClick={() => handleLogin("supplier@vertex.corp")}
             disabled={submitting}
-            className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-2.5 text-center hover:border-black hover:bg-white transition-all shadow-sm group"
+            className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
           >
-            <Store className="h-4 w-4 text-neutral-700 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-[10px] font-bold text-neutral-900 leading-tight">Supplier</span>
-            <span className="text-[9px] text-neutral-400">Acme Corp</span>
+            <div className="flex items-center gap-2 mb-1">
+              <Store className="h-4 w-4 text-neutral-800 group-hover:scale-110 transition-transform" />
+              <span className="text-[11px] font-bold text-neutral-900 leading-tight">Supplier</span>
+            </div>
+            <span className="text-[10px] text-neutral-500 font-medium">Vertex Components</span>
+            <span className="text-[9px] text-emerald-600 font-semibold mt-0.5">₹10L Invoice Live</span>
           </button>
 
           <button
             type="button"
-            onClick={() => handleLogin("buyer@metro.corp")}
+            onClick={() => handleLogin("provider@rapidfin.com")}
             disabled={submitting}
-            className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-2.5 text-center hover:border-black hover:bg-white transition-all shadow-sm group"
+            className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
           >
-            <Building2 className="h-4 w-4 text-neutral-700 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-[10px] font-bold text-neutral-900 leading-tight">Buyer</span>
-            <span className="text-[9px] text-neutral-400">Metro Retail</span>
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="h-4 w-4 text-amber-600 fill-amber-600 group-hover:scale-110 transition-transform" />
+              <span className="text-[11px] font-bold text-neutral-900 leading-tight">FinTech</span>
+            </div>
+            <span className="text-[10px] text-neutral-500 font-medium">Rapidfin (T+0)</span>
+            <span className="text-[9px] text-neutral-400 font-semibold mt-0.5">Instant Disbursal</span>
           </button>
 
           <button
             type="button"
-            onClick={() => handleLogin("lender@alphabank.com")}
+            onClick={() => handleLogin("lender@kaveri.com")}
             disabled={submitting}
-            className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-2.5 text-center hover:border-black hover:bg-white transition-all shadow-sm group"
+            className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
           >
-            <Landmark className="h-4 w-4 text-neutral-700 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-[10px] font-bold text-neutral-900 leading-tight">Bank</span>
-            <span className="text-[9px] text-neutral-400">Alpha Bank</span>
+            <div className="flex items-center gap-2 mb-1">
+              <Building2 className="h-4 w-4 text-neutral-800 group-hover:scale-110 transition-transform" />
+              <span className="text-[11px] font-bold text-neutral-900 leading-tight">NBFC Fund</span>
+            </div>
+            <span className="text-[10px] text-neutral-500 font-medium">Kaveri Capital</span>
+            <span className="text-[9px] text-neutral-400 font-semibold mt-0.5">₹12 Cr Liquidity</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleLogin("bank@meridian.com")}
+            disabled={submitting}
+            className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Landmark className="h-4 w-4 text-neutral-800 group-hover:scale-110 transition-transform" />
+              <span className="text-[11px] font-bold text-neutral-900 leading-tight">Bank</span>
+            </div>
+            <span className="text-[10px] text-neutral-500 font-medium">Meridian Bank</span>
+            <span className="text-[9px] text-neutral-400 font-semibold mt-0.5">11.0% Low APR</span>
           </button>
         </div>
       </div>
@@ -157,7 +180,7 @@ function LoginForm() {
 
       <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-neutral-400 font-medium">
         <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-        Stitch KYB & Single Universal Account Enabled
+        Stitch KYB & Tenancy-Isolated Accounts
       </div>
     </motion.div>
   );
