@@ -16,19 +16,23 @@
  * Forcing either through the other's path would mean a write the caller did not
  * ask for.
  *
- * The scoring itself is identical either way — both paths converge on
- * `scoreOffers`, so there is exactly one implementation of the ranking.
+ * The scoring is identical either way — both paths converge on `scoreOffers`,
+ * and both derive the supplier's gates through `utilityFor`, so there is one
+ * ranking implementation and one gate derivation.
  */
 
-import { prisma } from '@/lib/db';
 import { fail } from '@/lib/serialize';
 
-import { clearOpportunity } from '@/lib/market/clear';
 import { lenderBidProviderNames, lenderBidToOffer } from '@/lib/market/agent-adapter';
 import type { LenderBidPayload } from '@/lib/market/agent-adapter';
-import { decimalToPaise, toIsoDate } from '@/lib/market/prisma-adapter';
 import { scoreOffers } from '@/lib/market/score';
-import { supplierUtilityFromStored } from '@/lib/market/utility';
+import {
+  clearById,
+  faceValuePaiseFor,
+  loadOpportunity,
+  today,
+  utilityFor,
+} from '@/lib/market/server';
 import type { MatchResult } from '@/lib/market/types';
 
 export const dynamic = 'force-dynamic';
@@ -48,28 +52,32 @@ export async function POST(request: Request) {
     // camelCase. Rejecting one of them over a naming convention would be a
     // pointless integration failure.
     const opportunityId = body.opportunityId ?? body.opportunity_id;
-    if (!opportunityId) {
-      return fail('opportunityId is required', 400);
-    }
+    if (!opportunityId) return fail('opportunityId is required', 400);
 
     const urgencyNudgeBps = clampNudge(body.urgencyNudgeBps);
-    const asOf = new Date().toISOString().slice(0, 10);
+    const asOf = today();
 
-    const opportunity = await prisma.financingOpportunity.findUnique({
-      where: { id: opportunityId },
-      include: {
-        invoice: { select: { faceValue: true } },
-        // Without this join the gates fall back to the stored columns, which
-        // Track 1 leaves null by design — and clearing silently degrades to
-        // cost-only ranking.
-        cashPosition: { include: { obligations: { orderBy: { dueDate: 'asc' } } } },
-      },
-    });
-    if (!opportunity) return fail(`No opportunity ${opportunityId}`, 404);
+    let result: MatchResult;
 
-    const result = body.bids?.length
-      ? scoreAgentBids({ body, opportunity, opportunityId, asOf, urgencyNudgeBps })
-      : await scoreStoredBids({ opportunity, opportunityId, asOf, urgencyNudgeBps });
+    if (body.bids?.length) {
+      const opportunity = await loadOpportunity(opportunityId);
+      if (!opportunity) return fail(`No opportunity ${opportunityId}`, 404);
+      result = scoreAgentBids({
+        bids: body.bids,
+        opportunityId,
+        // Same derivation the stored path uses. Reading the stored columns here
+        // instead would return `unconstrained` — they are null by design — and
+        // every agent bid would be scored with no gates at all.
+        utility: utilityFor(opportunity, asOf),
+        faceValuePaise: faceValuePaiseFor(opportunity),
+        asOf,
+        urgencyNudgeBps,
+      });
+    } else {
+      const cleared = await clearById(opportunityId, urgencyNudgeBps, asOf);
+      if (!cleared) return fail(`No opportunity ${opportunityId}`, 404);
+      result = cleared;
+    }
 
     return Response.json(withLegacyFields(result));
   } catch (e) {
@@ -79,31 +87,23 @@ export async function POST(request: Request) {
 
 /** Bids posted inline by Track 3's agents. Nothing is persisted. */
 function scoreAgentBids({
-  body,
-  opportunity,
+  bids,
   opportunityId,
+  utility,
+  faceValuePaise,
   asOf,
   urgencyNudgeBps,
 }: {
-  body: MatchBody;
-  opportunity: { invoice: { faceValue: unknown }; sufficiencyFloor: unknown; timingDeadline: Date | null };
+  bids: LenderBidPayload[];
   opportunityId: string;
+  utility: ReturnType<typeof utilityFor>;
+  faceValuePaise: number;
   asOf: string;
   urgencyNudgeBps: number;
 }): MatchResult {
-  const bids = body.bids ?? [];
-
-  const utility = supplierUtilityFromStored(
-    opportunity.sufficiencyFloor === null
-      ? null
-      : decimalToPaise(opportunity.sufficiencyFloor as string),
-    opportunity.timingDeadline === null ? null : toIsoDate(opportunity.timingDeadline),
-    asOf,
-  );
-
   const { scoredOffers, survivors } = scoreOffers({
     offers: bids.map((b) => lenderBidToOffer(b, opportunityId)),
-    opportunity: { faceValuePaise: decimalToPaise(opportunity.invoice.faceValue as string) },
+    opportunity: { faceValuePaise },
     utility,
     providerNames: lenderBidProviderNames(bids),
     asOf,
@@ -138,72 +138,6 @@ function scoreAgentBids({
   };
 }
 
-/** Bids already in Postgres — the path the UI uses. */
-async function scoreStoredBids({
-  opportunity,
-  opportunityId,
-  asOf,
-  urgencyNudgeBps,
-}: {
-  opportunity: {
-    invoice: { faceValue: unknown };
-    sufficiencyFloor: unknown;
-    timingDeadline: Date | null;
-    cashPosition: {
-      currentCashPaise: number;
-      cashThresholdPaise: number;
-      obligations: { label: string; amountPaise: number; dueDate: Date }[];
-    } | null;
-  };
-  opportunityId: string;
-  asOf: string;
-  urgencyNudgeBps: number;
-}): Promise<MatchResult> {
-  const bids = await prisma.bid.findMany({
-    where: { opportunityId, status: 'ACTIVE' },
-    include: { provider: { select: { id: true, name: true } } },
-  });
-
-  return clearOpportunity({
-    opportunity: {
-      id: opportunityId,
-      invoice: { faceValue: opportunity.invoice.faceValue as string },
-      sufficiencyFloor: opportunity.sufficiencyFloor as string | null,
-      timingDeadline: opportunity.timingDeadline,
-      // Dates become YYYY-MM-DD here because Track 2's types use IsoDate
-      // strings — they survive JSON intact, where a Date does not.
-      cashPosition: opportunity.cashPosition
-        ? {
-            currentCashPaise: opportunity.cashPosition.currentCashPaise,
-            cashThresholdPaise: opportunity.cashPosition.cashThresholdPaise,
-            obligations: opportunity.cashPosition.obligations.map((o) => ({
-              label: o.label,
-              amountPaise: o.amountPaise,
-              dueDate: o.dueDate.toISOString().slice(0, 10),
-            })),
-          }
-        : null,
-    },
-    // Prisma Decimals stringify correctly for the adapter, which parses decimal
-    // text rather than going through Number().
-    bids: bids.map((b) => ({
-      id: b.id,
-      opportunityId: b.opportunityId,
-      providerId: b.providerId,
-      advanceRate: b.advanceRate.toString(),
-      annualRate: b.annualRate.toString(),
-      flatFee: b.flatFee.toString(),
-      tenorDays: b.tenorDays,
-      settlementDays: b.settlementDays,
-      recourse: b.recourse,
-      expiresAt: b.expiresAt,
-      provider: b.provider,
-    })),
-    asOf,
-    urgencyNudgeBps,
-  });
-}
-
 /** 0..10000. Out-of-range values are clamped rather than rejected. */
 function clampNudge(value: number | undefined): number {
   if (typeof value !== 'number' || Number.isNaN(value)) return 0;
@@ -216,14 +150,13 @@ function clampNudge(value: number | undefined): number {
  * `HttpMatchingClient` currently reads `matched` / `matchedBidRef` / `score` /
  * `matchId` and defaults `matched` to false when absent — which would report
  * "no match" for every successful match against the real union. Emitting these
- * alongside the real fields means their integration works today without them
- * changing code mid-sprint.
+ * alongside the real fields means their integration works without them changing
+ * code mid-sprint.
  *
  * **This is a shim, not the contract.** `status` is the real signal, and it
  * distinguishes NO_ACCEPTABLE_OFFER (a legitimate market outcome) from an
  * error — a distinction `matched: false` cannot express. Track 3 should migrate
- * to reading `status` and these fields should then be deleted. Tracked in
- * issue #9 item 4.
+ * to reading `status` and these fields should then be deleted. Issue #9.
  */
 function withLegacyFields(result: MatchResult) {
   const winner = result.status === 'MATCHED' ? result.allocations[0] : null;
