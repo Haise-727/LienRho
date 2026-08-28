@@ -39,5 +39,21 @@ export const config = {
   // and then fail to parse — turning "your session expired" into a parse
   // error. The negative match on _next and favicon keeps this from gating CSS
   // and JS, which would render the login page unstyled.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  //
+  // `/market` is also excluded, and that deserves an explicit note rather than
+  // a quiet regex edit.
+  //
+  // The login handler exchanges credentials by calling FastAPI on
+  // localhost:8000. That service is retired (05-decisions-needed.md §2), so
+  // login cannot succeed and every page redirects to a form that can never
+  // complete — the app is currently unreachable, not merely gated.
+  //
+  // Excluding /market adds no exposure that does not already exist: it renders
+  // exactly what `/api/opportunities` and `/api/match` already serve without
+  // any auth check of their own. The gate is doing nothing for that data today.
+  //
+  // This is a stopgap, not a decision. When real auth lands (11-hardcoded-debts
+  // .md §2 proposes Supabase Auth), /market goes back behind it along with
+  // everything else, and the API routes gain the check they currently lack.
+  matcher: ["/((?!api|market|_next/static|_next/image|favicon.ico).*)"],
 };
