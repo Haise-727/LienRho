@@ -121,11 +121,23 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-[#F8FAFC] text-[#0F172A] antialiased;
     background-color: #F8FAFC;
     color: #0F172A;
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-xl border border-slate-200/80 shadow-xs;
+  }
+  .glass-header {
+    @apply bg-white/90 backdrop-blur-xl border-b border-slate-200/80;
+  }
+  .cobalt-btn {
+    @apply bg-[#0047FF] hover:bg-[#0038D1] active:bg-[#002FA8] text-white font-semibold transition-all duration-150 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed;
   }
 }
