@@ -124,6 +124,26 @@ payroll — which is precisely the failure mode PS-5 describes.
 The old build's 30-day cash forecast is exactly the machinery for this, which is
 the single most valuable carryover in the project.
 
+**A "Urgency vs. Cost" slider is fine as an affordance, not as the input.**
+Show the supplier their *inferred* position on that axis — computed from the
+cash forecast, already positioned correctly — and let them nudge it if they
+disagree. That gets the UI benefit (it's tangible, it live-updates rankings)
+without reintroducing the exact failure mode above: a slider with no default
+is just the elicited-weights problem with a different widget.
+
+**On the scoring formula itself:** a smooth weighted-sum utility with an
+exponential decay term on settlement speed is a real alternative to the
+lexicographic gate-then-rank model above, and worth knowing about before
+committing. It can express "slightly late is only slightly bad" in a way a hard
+gate can't. The tradeoff: decay constants are exactly as arbitrary as elicited
+weights unless they're derived from something (e.g. calibrated against the
+forecast's own shortfall-date uncertainty), and a hard sufficiency/timing gate
+is far easier to explain to a judge or a supplier ("this offer doesn't cover
+what you need" vs. "this offer scores 0.71"). **Recommendation: ship the
+lexicographic version first — it's explainable and buildable in phase 3 — and
+treat the smooth utility function as a phase-6+ refinement once there's a real
+scoring engine to refine.**
+
 ---
 
 ## 5. The provider's side
@@ -196,6 +216,14 @@ be judged, they bid defensively and the supplier gets worse terms — an opaque
 scorer actively harms the side it claims to serve. Publishing the rule is both
 better economics and a much stronger story to a judge.
 
+**On calling it "second-price":** a Vickrey/second-price adaptation is worth
+exploring once a scoring engine exists — truthful bidding being optimal is a
+genuinely strong property. But "second price" is well-defined on a single
+number and ambiguous on a multi-attribute bid (second-*best* by whose scoring
+function, computed when?). Don't put "modified Vickrey" on a slide before the
+scoring engine can actually define what "second" means here — it's a phase-6+
+refinement, not a phase-3 claim.
+
 Two mechanisms worth building because they demonstrate judgement:
 
 - **Reserve / no-match.** If no offer clears the supplier's minimum acceptable
@@ -230,6 +258,24 @@ leave — and it will be right to. Expected calibration error is now a
 commercial liability, not a leaderboard number.
 
 ---
+
+## 8.5. Anti-double-financing — a cheap, concrete fraud check worth building early
+
+One failure mode no amount of clever scoring catches: the same invoice
+presented to two different providers, or the same invoice presented twice
+after being modified slightly. Both are real fraud patterns in receivables
+financing, not hypothetical.
+
+**The check is nearly free to build:** hash `(seller_tax_id, buyer_tax_id,
+invoice_number)` and reject on collision. It's a unique constraint in Postgres,
+not a service — no new infrastructure, no phase-6 dependency. This belongs in
+Phase 1 alongside the verification tiers, not deferred as a stretch goal.
+
+Worth being precise about what it catches and what it doesn't: it stops the
+*same* invoice being financed twice under an unchanged identifier. It does not
+catch a supplier who fabricates a slightly different invoice number for a
+duplicate claim — that needs the buyer-side verification (3-way match) doing
+its job, not the hash. The two checks are complementary, not redundant.
 
 ## 9. Settlement reliability — the requirement most teams will skip
 
