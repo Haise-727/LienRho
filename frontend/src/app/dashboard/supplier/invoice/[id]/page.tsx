@@ -140,7 +140,7 @@ export default function InvoiceCashForecastFocusPage() {
       />
 
       {/* 4. Prominent Cobalt Blue CTA: View Market Offers */}
-      <RunAuctionButton invoiceId={id} />
+      <RunAuctionButton invoiceId={id ?? opp.id} />
     </div>
   );
 }

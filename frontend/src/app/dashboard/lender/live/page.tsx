@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ActiveAuctionsFeed, LiveAuctionItem } from "@/components/lender/ActiveAuctionsFeed";
-import { NexusAgentTerminal } from "@/components/lender/NexusAgentTerminal";
 import { fetchOpportunities } from "@/lib/api-client";
 import { ArrowLeft, Activity, Radio, Cpu, Sliders, ShieldCheck } from "lucide-react";
 
@@ -90,7 +89,6 @@ export default function LenderLiveDealStreamPage() {
 
       {/* 2. Enclosed Collapsible Terminal Console */}
       <div className="pt-4">
-        <NexusAgentTerminal />
       </div>
     </div>
   );
