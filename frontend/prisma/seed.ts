@@ -277,12 +277,16 @@ async function main() {
       cashThresholdPaise: 100_000 * PAISE,
       obligations: {
         create: [
-          { label: "September payroll", amountPaise: 900_000 * PAISE, dueDate: daysFromNow(2) },
+          // Thursday: the steel invoice draws Vertex down to exactly its buffer.
+          // Dated a day before payroll rather than alongside it so the order is
+          // fixed by date, not by whether a sort happens to be stable.
           {
             label: "Kalyani Steel — billet delivery",
             amountPaise: 46_072_836,
-            dueDate: daysFromNow(2),
+            dueDate: daysFromNow(1),
           },
+          // Friday: payroll then leaves them 9,00,000 short of the buffer.
+          { label: "September payroll", amountPaise: 900_000 * PAISE, dueDate: daysFromNow(2) },
           // Outside the window: should not drive the floor.
           { label: "GST remittance — Q2", amountPaise: 180_000 * PAISE, dueDate: daysFromNow(12) },
         ],
@@ -683,19 +687,18 @@ async function main() {
       where: { id: positionId },
       include: { obligations: { orderBy: { dueDate: "asc" } } },
     });
-    const byDay = new Map<string, { total: number; labels: string[] }>();
-    for (const o of position.obligations) {
-      const key = o.dueDate.toISOString().slice(0, 10);
-      const e = byDay.get(key) ?? { total: 0, labels: [] };
-      e.total += o.amountPaise;
-      e.labels.push(o.label);
-      byDay.set(key, e);
-    }
+    // One obligation at a time, stopping at the first breach — the same
+    // semantics as deriveSupplierUtility(), so this check and the production
+    // derivation cannot report different floors.
     let cash = position.currentCashPaise;
-    for (const [day, { total, labels }] of [...byDay.entries()].sort()) {
-      cash -= total;
+    for (const o of position.obligations) {
+      cash -= o.amountPaise;
       if (cash < position.cashThresholdPaise) {
-        return { floorPaise: position.cashThresholdPaise - cash, deadline: day, driving: labels.join(" + ") };
+        return {
+          floorPaise: position.cashThresholdPaise - cash,
+          deadline: o.dueDate.toISOString().slice(0, 10),
+          driving: o.label,
+        };
       }
     }
     return null;
