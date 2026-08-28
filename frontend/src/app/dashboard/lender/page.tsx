@@ -4,21 +4,39 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { MetricsRow } from "@/components/lender/MetricsRow";
 import { SectorExposureGauges } from "@/components/lender/SectorExposureGauges";
-import { fetchProviders, CapitalProviderDetail, FALLBACK_PROVIDER_DETAIL } from "@/lib/api-client";
+import { fetchProviders, CapitalProviderDetail } from "@/lib/api-client";
 import { Landmark, Sliders, Radio, ArrowRight, Activity, ShieldCheck, PieChart } from "lucide-react";
 
 export default function LenderCommandCenterPage() {
-  const [provider, setProvider] = useState<CapitalProviderDetail>(FALLBACK_PROVIDER_DETAIL);
+  // Null until loaded, so an unreachable database does not render an invented
+  // lender with invented liquidity (#43).
+  const [provider, setProvider] = useState<CapitalProviderDetail | null>(null);
+
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       const res = await fetchProviders();
-      if (res.providers && res.providers.length > 0) {
-        setProvider(res.providers[0]);
-      }
+      setProvider(res.providers?.[0] ?? null);
+      setLoading(false);
     }
     load();
   }, []);
+
+  if (loading) {
+    return <p className="py-12 text-center text-sm text-slate-500">Loading portfolio…</p>;
+  }
+
+  if (!provider) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-sm font-semibold text-slate-900">No capital provider found</p>
+        <p className="mt-1 text-xs text-slate-500">
+          The provider registry is empty or unreachable.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -30,7 +48,7 @@ export default function LenderCommandCenterPage() {
             Capital Provider Command Center · Portfolio View
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            {provider.name || "Kaveri Capital (NBFC)"}
+            {provider.name}
           </h1>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
             Monitor institutional liquidity deployment, sector exposure concentration, and manage autonomous underwriting agents.

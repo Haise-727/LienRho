@@ -44,7 +44,9 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [role, setRoleState] = useState<UserRole>("supplier");
-  const [activeInvoiceId, setActiveInvoiceId] = useState<string>("inv-seed-001");
+  // Empty until a real invoice is opened. "inv-seed-001" here meant any consumer
+  // reading it before selection got a pointer to an invoice that does not exist.
+  const [activeInvoiceId, setActiveInvoiceId] = useState<string>("");
   const router = useRouter();
   const pathname = usePathname();
 

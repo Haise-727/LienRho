@@ -21,8 +21,10 @@ export function AuctionArena({
   invoiceId,
   opportunityId,
   initialUrgencyBps = 0,
-  drivingObligation = "September payroll",
-  sufficiencyFloor = "900000.00",
+  // No defaults. These arrive derived from /api/opportunities; a stand-in
+  // here would silently replace a real gap with a convincing number (#44).
+  drivingObligation,
+  sufficiencyFloor,
 }: AuctionArenaProps) {
   const [urgencyNudgeBps, setUrgencyNudgeBps] = useState<number>(initialUrgencyBps);
   // Null until the engine answers. Seeding this with FALLBACK_MATCH_RESULT

@@ -14,10 +14,10 @@ interface ObjectiveConstraintsCardProps {
 }
 
 export function ObjectiveConstraintsCard({
-  sufficiencyFloor = "900000.00",
+  sufficiencyFloor,
   sufficiencyFloorPaise = 90000000,
   timingDeadline = "2026-08-30",
-  drivingObligation = "September payroll",
+  drivingObligation,
   currentCash = "0.00",
   cashThreshold = "100000.00",
 }: ObjectiveConstraintsCardProps) {

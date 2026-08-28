@@ -1,13 +1,7 @@
-import { 
-  Opportunity, 
-  CapitalProviderDetail, 
-  FALLBACK_OPPORTUNITY, 
-  FALLBACK_PROVIDER_DETAIL 
-} from "./scoring";
+import { Opportunity, CapitalProviderDetail } from "./scoring";
 import type { MatchResult, ScoredOffer, Allocation, SupplierUtility } from "./market/types";
 
 export type { Opportunity, CapitalProviderDetail, ScoredOffer, Allocation, SupplierUtility, MatchResult };
-export { FALLBACK_OPPORTUNITY, FALLBACK_PROVIDER_DETAIL };
 
 
 export interface DbHealthResult {
@@ -105,11 +99,14 @@ export async function fetchOpportunities(status?: string): Promise<Opportunities
     if (!res.ok) throw new Error("Failed to fetch opportunities");
     const data = await res.json();
     if (!data.opportunities || data.opportunities.length === 0) {
-      return { count: 1, opportunities: [FALLBACK_OPPORTUNITY], isFallback: true };
+      return { count: 0, opportunities: [], isFallback: true };
     }
     return { count: data.count, opportunities: data.opportunities, isFallback: false };
   } catch {
-    return { count: 1, opportunities: [FALLBACK_OPPORTUNITY], isFallback: true };
+    // Empty, not a fabricated opportunity. isFallback tells the caller the
+    // fetch failed; inventing a row makes a broken connection look like a
+    // working marketplace (#43).
+    return { count: 0, opportunities: [], isFallback: true };
   }
 }
 
@@ -119,11 +116,11 @@ export async function fetchProviders(): Promise<ProvidersResponse> {
     if (!res.ok) throw new Error("Failed to fetch providers");
     const data = await res.json();
     if (!data.providers || data.providers.length === 0) {
-      return { count: 1, providers: [FALLBACK_PROVIDER_DETAIL], isFallback: true };
+      return { count: 0, providers: [], isFallback: true };
     }
     return { count: data.count, providers: data.providers, isFallback: false };
   } catch {
-    return { count: 1, providers: [FALLBACK_PROVIDER_DETAIL], isFallback: true };
+    return { count: 0, providers: [], isFallback: true };
   }
 }
 

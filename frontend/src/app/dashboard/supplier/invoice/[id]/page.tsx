@@ -6,14 +6,17 @@ import { useParams } from "next/navigation";
 import { InvoiceHeader } from "@/components/supplier/InvoiceHeader";
 import { ObjectiveConstraintsCard } from "@/components/supplier/ObjectiveConstraintsCard";
 import { RunAuctionButton } from "@/components/supplier/RunAuctionButton";
-import { fetchOpportunities, Opportunity, FALLBACK_OPPORTUNITY } from "@/lib/api-client";
+import { fetchOpportunities, Opportunity } from "@/lib/api-client";
 import { formatINR } from "@/lib/scoring";
 
 export default function InvoiceCashForecastFocusPage() {
   const params = useParams();
-  const id = typeof params?.id === "string" ? params.id : "inv-seed-001";
+  const id = typeof params?.id === "string" ? params.id : undefined;
 
-  const [opp, setOpp] = useState<Opportunity>(FALLBACK_OPPORTUNITY);
+  // Null until resolved. Seeding from FALLBACK_OPPORTUNITY meant an
+  // unresolvable id rendered a complete, plausible invoice — buyer, amount,
+  // obligations, bids — with nothing marking it fictional (#43).
+  const [opp, setOpp] = useState<Opportunity | null>(null);
   const [loading, setLoading] = useState(true);
   const [callOpen, setCallOpen] = useState(false);
 
@@ -26,9 +29,11 @@ export default function InvoiceCashForecastFocusPage() {
     const found = res.opportunities.find(
       (o) => o.id === id || o.invoice?.id === id || o.invoice?.invoiceNumber === id
     );
-    if (found) {
-      setOpp(found);
-    }
+    // `found ?? null`, not `if (found)`. Keeping the previous opportunity when
+    // the id no longer resolves is what made the placeholder sticky rather than
+    // momentary (#43) — and after a tier upgrade re-read it would silently show
+    // stale data as though the refresh had succeeded.
+    setOpp(found ?? null);
     setLoading(false);
   }, [id]);
 
@@ -36,22 +41,40 @@ export default function InvoiceCashForecastFocusPage() {
     void loadOpp();
   }, [loadOpp]);
 
-  const invoiceNumber = opp.invoice?.invoiceNumber || "INV-2026-0801";
-  const buyerName = opp.invoice?.customer?.name || "Bharat Auto Ltd";
-  const industry = opp.invoice?.customer?.industry || "Auto-Components";
-  const faceValue = opp.invoice?.faceValue || 1000000;
-  const tenorDays = opp.tenorDays || 45;
-  const dueDate = opp.invoice?.dueDate 
-    ? new Date(opp.invoice.dueDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-    : "07 Oct 2026";
-  const status = opp.status || "AUCTION_LIVE";
-  const verificationTier = opp.invoice?.verificationTier || "BUYER_ACCEPTED";
+  if (loading) {
+    return <p className="py-12 text-center text-sm text-slate-500">Loading invoice…</p>;
+  }
 
-  const sufficiencyFloor = opp.sufficiencyFloor || "900000.00";
-  const timingDeadline = opp.timingDeadline 
+  if (!opp) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-sm font-semibold text-slate-900">Invoice not found</p>
+        <p className="mt-1 text-xs text-slate-500">
+          No opportunity matches {id ?? "this address"}.
+        </p>
+      </div>
+    );
+  }
+
+  const invoiceNumber = opp.invoice?.invoiceNumber ?? "—";
+  const buyerName = opp.invoice?.customer?.name ?? "—";
+  const industry = opp.invoice?.customer?.industry ?? "—";
+  const faceValue = opp.invoice?.faceValue ?? 0;
+  const tenorDays = opp.tenorDays;
+  const dueDate = opp.invoice?.dueDate
+    ? new Date(opp.invoice.dueDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
+  const status = opp.status;
+  const verificationTier = opp.invoice?.verificationTier ?? "SUPPLIER_ASSERTED";
+
+  // Derived server-side from the cash position and returned by
+  // /api/opportunities, so these no longer fall through to a hardcoded
+  // ₹9,00,000 and "September payroll" on every invoice (#44).
+  const sufficiencyFloor = opp.sufficiencyFloor ?? null;
+  const timingDeadline = opp.timingDeadline
     ? new Date(opp.timingDeadline).toISOString().split("T")[0]
-    : "2026-08-30";
-  const drivingObligation = opp.drivingObligation || "September payroll";
+    : null;
+  const drivingObligation = opp.drivingObligation ?? null;
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto py-2">
