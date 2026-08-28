@@ -223,11 +223,9 @@ Fargate task security group only**, not from the VPC generally.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | publishable, but keep it out of the image |
 | Google client ID/secret | **not in the repo today** — they live in the Supabase dashboard. If you move to Cognito they move to Secrets Manager |
 
-> ⚠️ **Rotate before any deployment.** The current database password and the
-> Google client secret were shared in plain text during the sprint. Neither is
-> in the repository, but both are in chat history. Reset both — Supabase
-> Settings → Database → Reset password, and Google Cloud Console → Credentials
-> → Reset secret. Do this before anything is publicly reachable, not after.
+Both current credentials need rotating before deployment — see the
+[pre-deployment checklist](#pre-deployment-checklist), which explains why doing
+it *at* deploy time is the right sequencing rather than a deferral.
 
 ---
 
@@ -270,6 +268,47 @@ existing session until the token expires. Ordinary JWT behaviour, documented in
 
 ---
 
+## Pre-deployment checklist
+
+Everything below is deliberately deferred to deployment time. Nothing here
+needs doing during the sprint, and some of it is actively worse done early.
+
+**The two categories are not the same, and the difference matters:**
+
+### Blocking — the deployment is unsafe without these
+
+| # | Item | Why it blocks |
+|---|---|---|
+| 1 | **`requireUser()` on every API route** | Without it the ledger, every bid and every opportunity are readable by anyone who can reach the load balancer. Not a hardening step — the difference between private and public data |
+| 2 | **Scope every query by `user.org.id`** | Same fix, same routes. This is what makes "a provider must never see another provider's bids" real rather than a comment |
+| 3 | **Aurora and ElastiCache in private subnets** | No public endpoint. Security groups admit the Fargate task role only |
+| 4 | **S3 bucket private, SSE-KMS** | Presigned URLs only; the browser never receives credentials |
+
+These are gates on the deploy, not notes. If the ALB goes public before 1 and
+2, the data is public — a doc entry does not change that.
+
+### Deploy-time housekeeping — better done then than now
+
+| # | Item | Why waiting is right |
+|---|---|---|
+| 5 | **Rotate the database password** | It lands in Secrets Manager as part of the cutover. Rotating during the sprint means doing it twice, and it breaks all four `.env` files the moment it changes |
+| 6 | **Rotate the Google OAuth client secret** | If auth moves to Cognito the client is re-registered anyway. Rotating first would be work thrown away |
+| 7 | **Move every secret out of `.env` into Secrets Manager** | There is no Secrets Manager to move them into yet |
+| 8 | **Delete the seeded `.example` allowlist rows** | Harmless — no Google account owns an `@example` address — but tidy before anything real |
+
+Why 5 and 6 are safe to defer, stated plainly rather than assumed: the
+credentials protect a hackathon project holding **entirely synthetic data**,
+reachable only by the four of us, with no public endpoint. The exposure is a
+chat transcript, not a public repository — the secret scan in CI already fails
+the build if either is ever committed. Rotate at cutover, into Secrets Manager,
+once.
+
+**If any of that stops being true — a public URL, a screen recording, real
+data, or the repo going public — rotate immediately instead.** The reasoning
+above depends on every one of those conditions holding.
+
+---
+
 ## Order of work
 
 Deliberately not the order the AWS plan implies — auth decision first, because
@@ -278,7 +317,7 @@ it changes what you build.
 | # | Step | Why here |
 |---|---|---|
 | 1 | **Decide the auth option** (A/B/C above) | Changes what you provision. Deciding late means rework |
-| 2 | **Rotate the shared credentials** | Before anything is reachable |
+| 2 | **Work the [pre-deployment checklist](#pre-deployment-checklist)** | Four blocking items, four housekeeping ones |
 | 3 | Provision Aurora, private subnets | |
 | 4 | `migrate deploy` + seed, verify the worked example | Proves the data layer before compute is involved |
 | 5 | **Add `requireUser()` to every API route** | The one true blocker for a public deployment |
