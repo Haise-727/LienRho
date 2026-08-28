@@ -25,7 +25,7 @@ import type {
 
 export type { PortfolioSummary };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
 // Thrown when the session is missing or the backend rejects the token. The
 // proxy redirects unauthenticated navigation, so reaching this means the token

@@ -6,6 +6,9 @@ import { Volume2, ArrowRight, ShieldCheck, Lock, Sparkles, AlertCircle, CheckCir
 import type { ScoredOffer } from "@/lib/api-client";
 import { formatPaiseToINR, formatBps } from "@/lib/scoring";
 
+import { useSpeech } from "@/lib/voice/useSpeech";
+import { offerScript } from "@/lib/voice/script";
+
 interface DittoDealCardProps {
   offer: ScoredOffer;
   isBestMatch?: boolean;
@@ -22,7 +25,7 @@ export const DittoDealCard: React.FC<DittoDealCardProps> = ({
   onPlayAudio
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const { speak, stop, state: speechState, error: speechError, isBusy: isPlayingAudio } = useSpeech();
 
   const handleAcceptClick = () => {
     setIsProcessing(true);
@@ -33,11 +36,17 @@ export const DittoDealCard: React.FC<DittoDealCardProps> = ({
   };
 
   const handleAudioClick = () => {
-    setIsPlayingAudio(true);
-    if (onPlayAudio) {
-      onPlayAudio(offer);
+    // Clicking again while it is talking stops it. Without this the only way
+    // to interrupt a 20-second clip is to reload the page, which is not
+    // something you want to discover mid-demo.
+    if (isPlayingAudio) {
+      stop();
+      return;
     }
-    setTimeout(() => setIsPlayingAudio(false), 3500);
+    onPlayAudio?.(offer);
+    // The script is built from this offer's already-computed figures — the
+    // spoken numbers are the same ones on the card, by construction.
+    void speak(offerScript(offer));
   };
 
   const handleViewLedgerClick = () => {
@@ -200,8 +209,21 @@ export const DittoDealCard: React.FC<DittoDealCardProps> = ({
               }`}
             >
               <Volume2 className="h-3.5 w-3.5 text-slate-600" />
-              {isPlayingAudio ? "ElevenLabs Playing..." : "Audio Breakdown"}
+              {speechState === "loading"
+                ? "Generating…"
+                : speechState === "playing"
+                  ? "Stop"
+                  : "Audio Breakdown"}
             </button>
+          )}
+
+          {/* Say why it is silent. A button that does nothing and explains
+              nothing reads as broken, and "no API key" is a setup step rather
+              than a fault. */}
+          {speechError && (
+            <span className="text-[11px] leading-tight text-amber-700 max-w-[220px]">
+              {speechState === "unconfigured" ? "Voice not configured" : speechError}
+            </span>
           )}
 
           {/* Secondary Outline Action Button */}

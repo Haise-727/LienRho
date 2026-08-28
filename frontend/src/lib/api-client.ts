@@ -6,7 +6,9 @@ import {
 } from "./scoring";
 import type { MatchResult, ScoredOffer, Allocation, SupplierUtility } from "./market/types";
 
-export type { ScoredOffer, Allocation, SupplierUtility, MatchResult };
+export type { Opportunity, CapitalProviderDetail, ScoredOffer, Allocation, SupplierUtility, MatchResult };
+export { FALLBACK_OPPORTUNITY, FALLBACK_PROVIDER_DETAIL };
+
 
 export interface DbHealthResult {
   status: "ok" | "degraded" | "unreachable";
