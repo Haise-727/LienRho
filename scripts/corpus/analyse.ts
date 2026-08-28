@@ -22,7 +22,7 @@ import { addDays, rupeesToPaise, formatPaise } from '../../frontend/src/lib/mark
 import type { MatchResult } from '../../frontend/src/lib/market/types';
 
 const AS_OF = '2026-08-29';
-const CORPUS = 'data/corpus/canonical.json';
+const CORPUS = process.env.CORPUS ?? 'data/corpus/canonical.json';
 
 interface CanonicalInvoice {
   invoice_id: string;

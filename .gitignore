@@ -28,3 +28,4 @@ out/
 # Trained model artifacts (regenerate with: uv run python -m app.ml_core.train)
 backend/app/ml_core/artifacts/
 data/corpus/
+data/corpus5k/
