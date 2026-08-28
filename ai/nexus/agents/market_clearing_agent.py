@@ -53,7 +53,7 @@ def clearing_workflow(payload: dict) -> ClearingResult:
 class MarketClearingAgent:
     def __init__(self, matching: MatchingClient, providers: list[ProviderProfile] | None = None):
         self._matching = matching
-        self._providers = providers or DEFAULT_PROVIDERS
+        self._providers = DEFAULT_PROVIDERS if providers is None else providers
         self._wf = clearing_workflow
 
     def run(self, request: ClearingRequest, settings: NexusSettings | None = None) -> ClearingResult:

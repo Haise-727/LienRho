@@ -50,8 +50,9 @@ def supplier_task(supplier: SupplierInput, settings: NexusSettings) -> UrgencyVe
     if llm_text:
         rationale = llm_text.strip()
     else:
+        need_ratio = min(1.0, supplier.cash_need_paise / max(1, supplier.invoice_amount_paise))
         rationale = (
-            f"Cash need is {supplier.cash_need_paise / supplier.invoice_amount_paise:.0%} "
+            f"Cash need is {need_ratio:.0%} "
             f"of invoice; due in {_days_until(supplier.due_date)} days -> {level.value} urgency."
         )
     return UrgencyVerdict(
