@@ -3,6 +3,12 @@
 **An agentic capital marketplace for supply-chain working capital.**
 CSI ORIGIN 2026 · Problem Statement 5
 
+[![CI](https://github.com/Haise-727/LienRho/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Haise-727/LienRho/actions/workflows/ci.yml)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![Prisma](https://img.shields.io/badge/Prisma-7-2D3748)
+![Postgres](https://img.shields.io/badge/PostgreSQL-16-336791)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
+
 A supplier holding a verified invoice shouldn't have to call one bank. LienRho
 turns that invoice into a live opportunity, lets multiple capital providers
 compete to fund it, and picks the winner by what the offer is **actually worth
@@ -213,6 +219,65 @@ TReDS exists. So the claim has to be precise:
 | **Utility inferred from real cash position** | We read dated obligations and derive urgency, instead of asking suppliers to self-report weights they cannot honestly quantify |
 | **`NO_ACCEPTABLE_OFFER` as a first-class outcome** | The system declines to transact when nothing clears the floor |
 | **Auditable determinism** | Every rupee traces to a named function, and the ledger balances or the endpoint fails |
+
+---
+
+## Problem Statement 5 — requirement traceability
+
+Every requirement from the brief, and where it lives in this repo.
+
+| # | Requirement | Where | Status |
+|---|---|---|---|
+| **R1** | Verified invoices presented as financing opportunities to multiple eligible providers | `Invoice.verificationTier` (3 graded tiers) + `FinancingOpportunity`; `GET /api/opportunities` | ✅ |
+| **R2** | Intelligently match opportunities to providers on risk appetite, liquidity, capacity, supplier/buyer characteristics | `CapitalProvider` mandate (cost of funds, hurdle, ticket range, tenor, risk floor, concentration cap); `clearOpportunity()` | ✅ |
+| **R3** | Competing offers differing across rate, tenor, advance rate, fees, settlement speed, repayment structure | `Bid` carries all six; 4 differentiated provider archetypes produce a genuine Pareto frontier | ✅ |
+| **R4** | Evaluate on overall suitability, not lowest rate | `scoreOffers()` — lexicographic sufficiency/timing gates, then effective-cost ranking. **The cheapest offer loses in the seeded demo.** | ✅ |
+| **R5** | Account for information asymmetry, incomplete information, changing capital, differing risk | Graded verification tiers disclosed to providers; `probabilityOfDefault` + `expectedDilutionPct`; `EscrowLock` tracks capital as it moves | ✅ |
+| **R6** | Providers evaluate against risk-adjusted return requirements and portfolio constraints | `hurdleRate`, `costOfFunds`, `concentrationLimitPct`, `availableLiquidity`; mandates stay private from the scorer | ✅ |
+| **R7** | Complete workflow: verification → risk → discovery → offers → matching → financing → settlement → learning | 13-state `OpportunityStatus` machine; ledger posts Day 0 and Day 90; `Match` records quoted-vs-delivered | ✅ core; learning loop partial |
+
+**Annexure — agent autonomy.** Supplier, lender and market-clearing agents run
+in `ai/nexus/`. Human involvement is reserved for exceptions, as the annexure
+asks. The LLM chooses posture; deterministic functions compute every figure.
+
+**Annexure — settlement reliability.** A match is not complete because an offer
+was accepted. `Match` stores `quotedSettlementDays` against
+`actualDisbursalDate`, and `expectedBuyerPayment` against
+`actualBuyerPayment`, so a provider that quotes T+1 and delivers T+2 is
+measurable — the input the learning loop needs.
+
+---
+
+## Team
+
+**Track-parallel build, four people, one sprint.**
+
+| Member | GitHub | Track |
+|---|---|---|
+| Ragav Hariharan | [@ragavhariharan](https://github.com/ragavhariharan) | **Track 1** — database, Prisma schema, Stitch double-entry ledger, API routes |
+| Harsha Sakamuri | [@Haise-727](https://github.com/Haise-727) | **Track 2** — CodeCrafters matching engine, lexicographic scoring, Redis locks |
+| Tharoon | [@ConTresillo](https://github.com/ConTresillo) | **Track 3** — NexusX multi-agent layer, ElevenLabs voice |
+| Yuvaraj R | [@YUVARAJ-R-ai](https://github.com/YUVARAJ-R-ai) | **Track 4** — frontend UI, infrastructure, AWS migration plan |
+
+Ownership boundaries are recorded in
+[`docs/07-file-ownership.md`](docs/07-file-ownership.md), which is how four
+people worked in one repo without colliding.
+
+---
+
+## Engineering practice
+
+- **CI on every push and PR** — schema validation, typecheck, 18 tests, and a
+  production build with no database, proving nothing touches Postgres at build
+  time.
+- **Secret scanning** — CI fails if a `.env` is ever committed or a connection
+  string with an embedded password appears in tracked files.
+- **Dependency audit** — advisory, so a transitive dev-only advisory is visible
+  without blocking a merge.
+- **Migrations, not `db push`** — `prisma/migrations/0_init` is baselined and
+  `migrate deploy` is verified against an empty database, so the Aurora cutover
+  in [`docs/08-aws-migration-plan.md`](docs/08-aws-migration-plan.md) needs no
+  baselining work.
 
 ---
 
