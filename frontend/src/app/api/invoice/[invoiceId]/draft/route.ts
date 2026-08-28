@@ -1,39 +1,55 @@
-// Proxies the reminder draft to the browser with the session attached (#20).
-//
-// ApprovalPanel fetches the draft from the client — it is what the user reads
-// in order to decide, and the panel loads it in response to a choice rather
-// than at render time. The token is httpOnly, so the request has to pass
-// through the server to be authorized.
-//
-// Not gated on approval (FR-011, OQ-01): the gate stands in front of *sending*,
-// and requiring approval to read a draft would invert the review step.
-
 import { NextResponse } from "next/server";
 import { getSessionToken } from "@/lib/session";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const CHANNELS = new Set(["EMAIL", "WHATSAPP"]);
+import { prisma } from "@/lib/db";
+import { generateText } from "ai";
+import { siliconFlow } from "@/lib/ai/siliconflow";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ invoiceId: string }> },
 ) {
   const { invoiceId } = await params;
-  const requested = new URL(request.url).searchParams.get("channel") ?? "EMAIL";
-  const channel = CHANNELS.has(requested) ? requested : "EMAIL";
-
   const token = await getSessionToken();
   if (!token) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const upstream = await fetch(
-    `${API_BASE}/api/invoice/${encodeURIComponent(invoiceId)}/draft?channel=${channel}`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
-  );
-
-  return new NextResponse(await upstream.text(), {
-    status: upstream.status,
-    headers: { "Content-Type": "application/json" },
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: { customer: true }
   });
+
+  if (!invoice) {
+    return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+  }
+
+  const dueDate = invoice.dueDate.toISOString().split('T')[0];
+  const amount = Number(invoice.faceValue);
+  
+  const prompt = `You are a professional financial assistant drafting a polite but firm payment reminder for an overdue invoice.
+  
+Invoice Details:
+- Invoice ID: ${invoice.id}
+- Customer Name: ${invoice.customer.name}
+- Amount Due: $${amount}
+- Due Date: ${dueDate}
+
+Write a short, professional email reminder asking for payment. Use markdown formatting.`;
+
+  try {
+    const { text } = await generateText({
+      model: siliconFlow("deepseek-ai/DeepSeek-V3"),
+      prompt,
+    });
+
+    return NextResponse.json({
+      kind: "REMINDER",
+      title: `Reminder — ${invoiceId}`,
+      contentMarkdown: text,
+      editable: true
+    });
+  } catch (error) {
+    console.error("AI Generation failed:", error);
+    return NextResponse.json({ error: "Failed to generate draft" }, { status: 500 });
+  }
 }

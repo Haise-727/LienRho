@@ -1,12 +1,8 @@
-import { 
-  Opportunity, 
-  CapitalProviderDetail, 
-  FALLBACK_OPPORTUNITY, 
-  FALLBACK_PROVIDER_DETAIL 
-} from "./scoring";
+import { Opportunity, CapitalProviderDetail } from "./scoring";
 import type { MatchResult, ScoredOffer, Allocation, SupplierUtility } from "./market/types";
 
-export type { ScoredOffer, Allocation, SupplierUtility, MatchResult };
+export type { Opportunity, CapitalProviderDetail, ScoredOffer, Allocation, SupplierUtility, MatchResult };
+
 
 export interface DbHealthResult {
   status: "ok" | "degraded" | "unreachable";
@@ -81,110 +77,6 @@ export interface MatchApiResponse {
   isFallback?: boolean;
 }
 
-export const FALLBACK_MATCH_RESULT: MatchApiResponse = {
-  status: "MATCHED",
-  opportunityId: "opp-seed-001",
-  allocations: [
-    {
-      offerId: "bid-rapidfin",
-      providerId: "prov-rapidfin",
-      providerName: "Rapidfin",
-      fundedPaise: 95000000,
-      providerLiquidityAfterPaise: -1,
-    }
-  ],
-  scoredOffers: [
-    {
-      offer: {
-        id: "bid-rapidfin",
-        opportunityId: "opp-seed-001",
-        providerId: "prov-rapidfin",
-        advanceRateBps: 9500,
-        annualRateBps: 1350,
-        feesPaise: 0,
-        tenorDays: 45,
-        settlementDays: 0,
-        recourse: "NON_RECOURSE",
-        expiresAt: "2026-09-30"
-      },
-      providerName: "Rapidfin",
-      advancePaise: 95000000,
-      discountChargePaise: 1581164,
-      netCashPaise: 93418836,
-      effectiveCostBps: 1373,
-      arrivalDate: "2026-08-28",
-      gates: {
-        sufficiency: { passed: true, reason: "delivers ₹9.34L (floor ₹9.00L)" },
-        timing: { passed: true, reason: "lands 28 Aug (deadline 30 Aug)" }
-      },
-      disqualified: false,
-      rank: 1,
-      dominatedBy: null
-    },
-    {
-      offer: {
-        id: "bid-meridian",
-        opportunityId: "opp-seed-001",
-        providerId: "prov-meridian",
-        advanceRateBps: 8000,
-        annualRateBps: 1100,
-        feesPaise: 250000,
-        tenorDays: 45,
-        settlementDays: 3,
-        recourse: "WITH_RECOURSE",
-        expiresAt: "2026-09-30"
-      },
-      providerName: "Meridian Bank",
-      advancePaise: 80000000,
-      discountChargePaise: 1084932,
-      netCashPaise: 78665068,
-      effectiveCostBps: 1376,
-      arrivalDate: "2026-09-02",
-      gates: {
-        sufficiency: { passed: false, reason: "short ₹1.13L" },
-        timing: { passed: false, reason: "three days late" }
-      },
-      disqualified: true,
-      rank: null,
-      dominatedBy: null
-    },
-    {
-      offer: {
-        id: "bid-kaveri",
-        opportunityId: "opp-seed-001",
-        providerId: "prov-kaveri",
-        advanceRateBps: 8800,
-        annualRateBps: 1220,
-        feesPaise: 100000,
-        tenorDays: 45,
-        settlementDays: 1,
-        recourse: "WITH_RECOURSE",
-        expiresAt: "2026-09-30"
-      },
-      providerName: "Kaveri Capital (NBFC)",
-      advancePaise: 88000000,
-      discountChargePaise: 1323616,
-      netCashPaise: 86576384,
-      effectiveCostBps: 1334,
-      arrivalDate: "2026-08-31",
-      gates: {
-        sufficiency: { passed: false, reason: "short ₹0.34L" },
-        timing: { passed: false, reason: "one day late" }
-      },
-      disqualified: true,
-      rank: null,
-      dominatedBy: null
-    }
-  ],
-  utility: {
-    sufficiencyFloorPaise: 90000000,
-    timingDeadline: "2026-08-30",
-    drivingObligation: "September payroll",
-    unconstrained: false
-  },
-  isFallback: true
-};
-
 // ---------------------------------------------------------------- API Calls
 
 export async function checkDbHealth(): Promise<DbHealthResult> {
@@ -207,11 +99,14 @@ export async function fetchOpportunities(status?: string): Promise<Opportunities
     if (!res.ok) throw new Error("Failed to fetch opportunities");
     const data = await res.json();
     if (!data.opportunities || data.opportunities.length === 0) {
-      return { count: 1, opportunities: [FALLBACK_OPPORTUNITY], isFallback: true };
+      return { count: 0, opportunities: [], isFallback: true };
     }
     return { count: data.count, opportunities: data.opportunities, isFallback: false };
   } catch {
-    return { count: 1, opportunities: [FALLBACK_OPPORTUNITY], isFallback: true };
+    // Empty, not a fabricated opportunity. isFallback tells the caller the
+    // fetch failed; inventing a row makes a broken connection look like a
+    // working marketplace (#43).
+    return { count: 0, opportunities: [], isFallback: true };
   }
 }
 
@@ -221,11 +116,11 @@ export async function fetchProviders(): Promise<ProvidersResponse> {
     if (!res.ok) throw new Error("Failed to fetch providers");
     const data = await res.json();
     if (!data.providers || data.providers.length === 0) {
-      return { count: 1, providers: [FALLBACK_PROVIDER_DETAIL], isFallback: true };
+      return { count: 0, providers: [], isFallback: true };
     }
     return { count: data.count, providers: data.providers, isFallback: false };
   } catch {
-    return { count: 1, providers: [FALLBACK_PROVIDER_DETAIL], isFallback: true };
+    return { count: 0, providers: [], isFallback: true };
   }
 }
 
@@ -241,10 +136,24 @@ export async function fetchProviderSelf(
   }
 }
 
+/**
+ * Clear one opportunity through the matching engine.
+ *
+ * Returns null when the engine cannot be reached. It previously returned
+ * FALLBACK_MATCH_RESULT — a complete, plausible clearing decision with a winning
+ * provider, a net cash figure and gate explanations, none of which any engine
+ * produced (#41).
+ *
+ * That is different in kind from a mock opportunity. A mock opportunity invents
+ * input data; this invented the *decision*. The failure mode is that a dropped
+ * database connection mid-demo still resolves the auction and still looks
+ * right — nobody in the room can tell, so we keep presenting a result that was
+ * never computed. A visible failure is strictly better than an invisible one.
+ */
 export async function matchOpportunity(
   opportunityId: string,
   urgencyNudgeBps: number = 0,
-): Promise<MatchApiResponse> {
+): Promise<MatchApiResponse | null> {
   try {
     const res = await fetch("/api/match", {
       method: "POST",
@@ -258,11 +167,8 @@ export async function matchOpportunity(
     const data: MatchApiResponse = await res.json();
     return { ...data, isFallback: false };
   } catch (err) {
-    console.warn("Falling back to pre-cleared matching engine result due to network/DB condition:", err);
-    return {
-      ...FALLBACK_MATCH_RESULT,
-      opportunityId,
-    };
+    console.error(`Could not clear ${opportunityId}:`, err);
+    return null;
   }
 }
 

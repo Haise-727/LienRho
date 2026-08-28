@@ -707,7 +707,11 @@ async function main() {
   // Kaveri's capital came back with the discount earned on top.
   await prisma.capitalProvider.update({
     where: { id: providers["kaveri-capital"].id },
-    data: { availableLiquidity: money("120000000.00").plus(econ2.discountCharge) },
+    // Capital returned, and the discount is income rather than deployable
+    // capital — adding it to availableLiquidity pushed available above total,
+    // which made "how much can you deploy" answer with more than the provider
+    // owns.
+    data: { availableLiquidity: "120000000.00" },
   });
 
   // ------------------------------------------------------------ report

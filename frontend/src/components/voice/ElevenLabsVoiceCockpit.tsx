@@ -1,62 +1,89 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Mic, MicOff, X, Sparkles, Radio } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSpeech } from "@/lib/voice/useSpeech";
+import { useMicrophone } from "@/lib/voice/useMicrophone";
 
 interface ElevenLabsVoiceCockpitProps {
   isOpen: boolean;
   onClose: () => void;
   dealContext?: string;
+  /** Scopes answers to one auction. Without it the assistant picks the demo
+   *  opportunity, deterministically — see /api/voice/answer. */
+  opportunityId?: string;
 }
 
 export const ElevenLabsVoiceCockpit: React.FC<ElevenLabsVoiceCockpitProps> = ({
   isOpen,
   onClose,
-  dealContext: _dealContext
+  dealContext: _dealContext,
+  opportunityId
 }) => {
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const { speak, stop: stopSpeaking, state: speechState, error: speechError } = useSpeech();
+  const isSpeaking = speechState === "playing" || speechState === "loading";
   const [transcript, setTranscript] = useState<Array<{ sender: "user" | "cfo"; text: string }>>([
     {
+      // Deliberately carries no figures. The previous greeting hardcoded
+      // "₹10,00,000" and "₹9,34,188", which were right for one seeded invoice
+      // and wrong for every other — a confident wrong number in the first
+      // sentence is worse than no number at all. Real figures arrive in the
+      // answers, read from the database.
       sender: "cfo",
-      text: "Hello! I am your AI Treasury Assistant. I've analyzed your ₹10,00,000 receivable from Bharat Auto Ltd. Rapidfin is offering ₹9,34,188 upfront (T+0). Would you like to accept or review timing constraints?"
+      text: "I'm your treasury assistant. Ask me which offer wins and why, which is cheapest, why an offer was disqualified, what this supplier needs and by when, or whether the ledger balances."
     }
   ]);
   const [userQuery, setUserQuery] = useState("");
+  const [thinking, setThinking] = useState(false);
 
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isOpen) {
-      const speakTimer = setTimeout(() => {
-        setIsSpeaking(true);
-        timer = setTimeout(() => setIsSpeaking(false), 4000);
-      }, 50);
-      return () => {
-        clearTimeout(speakTimer);
-        clearTimeout(timer);
-      };
-    }
-  }, [isOpen]);
+  // Ask the server, then speak the answer. Two round trips on purpose:
+  // /api/voice/answer reads live database state and produces the words,
+  // /api/voice/speak turns those exact words into audio. Neither invents a
+  // figure — the assistant can only say what the clearing engine computed.
+  const ask = useCallback(async (text: string) => {
+    const question = text.trim();
+    if (!question || thinking) return;
 
-  const handleSendPrompt = (text: string) => {
-    if (!text.trim()) return;
-    const newHistory = [...transcript, { sender: "user" as const, text }];
-    setTranscript(newHistory);
+    setTranscript((prev) => [...prev, { sender: "user" as const, text: question }]);
     setUserQuery("");
-    setIsSpeaking(true);
+    setThinking(true);
 
-    setTimeout(() => {
-      let reply = "Understood. Re-clearing your auction via POST /api/match with updated urgency override.";
-      if (text.toLowerCase().includes("cost") || text.toLowerCase().includes("rate") || text.toLowerCase().includes("apr")) {
-        reply = "Evaluating true cost of capital: denominator is net cash delivered. Kaveri Capital offers 13.34% true cost but arrives past your 30 August payroll deadline.";
-      } else if (text.toLowerCase().includes("accept") || text.toLowerCase().includes("disburse")) {
-        reply = "Executing instant disbursal with Rapidfin. Stitch double-entry journal entry has been posted. ₹9,34,188 credited to Vertex Components cash account.";
-      }
-      setTranscript([...newHistory, { sender: "cfo" as const, text: reply }]);
-      setIsSpeaking(false);
-    }, 1200);
-  };
+    try {
+      const response = await fetch("/api/voice/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, opportunityId }),
+      });
+      const data = await response.json();
+      const answer: string =
+        data?.answer ?? "I could not reach the marketplace data just now.";
+      setTranscript((prev) => [...prev, { sender: "cfo" as const, text: answer }]);
+      // Speak it, but a failure here must not lose the answer — the text is
+      // already on screen, so silence degrades rather than breaks.
+      void speak(answer);
+    } catch {
+      setTranscript((prev) => [
+        ...prev,
+        { sender: "cfo" as const, text: "I could not reach the marketplace data just now." },
+      ]);
+    } finally {
+      setThinking(false);
+    }
+  }, [opportunityId, speak, thinking]);
+
+  const { start: startListening, stop: stopListening, listening: isListening, supported: micSupported, error: micError } =
+    useMicrophone(ask);
+
+  const handleSendPrompt = (text: string) => void ask(text);
+
+  // Stop the audio when the panel closes, or it keeps talking to an empty room.
+  useEffect(() => {
+    if (!isOpen) {
+      stopSpeaking();
+      stopListening();
+    }
+  }, [isOpen, stopSpeaking, stopListening]);
 
   return (
     <AnimatePresence>
@@ -152,10 +179,23 @@ export const ElevenLabsVoiceCockpit: React.FC<ElevenLabsVoiceCockpitProps> = ({
               ))}
             </div>
 
+            {/* Say why it is silent or deaf. A dead-looking control with no
+                explanation reads as broken, and "no API key" and "this browser
+                cannot listen" are setup facts rather than faults. */}
+            {(speechError || micError) && (
+              <div className="border-t border-slate-200 bg-amber-50 px-4 py-2 text-[11px] leading-snug text-amber-800">
+                {speechState === "unconfigured"
+                  ? "Voice output isn't configured here — answers still appear as text."
+                  : (micError ?? speechError)}
+              </div>
+            )}
+
             {/* Action Bar */}
             <div className="border-t border-slate-200 p-4 bg-white flex items-center gap-2">
               <button
-                onClick={() => setIsListening(!isListening)}
+                onClick={() => (isListening ? stopListening() : startListening())}
+                disabled={!micSupported}
+                title={micSupported ? "Ask by voice" : "This browser cannot listen — type instead"}
                 className={`flex h-10 w-10 items-center justify-center rounded-md transition-all ${
                   isListening
                     ? "bg-red-600 text-white shadow-xs"
@@ -164,6 +204,9 @@ export const ElevenLabsVoiceCockpit: React.FC<ElevenLabsVoiceCockpitProps> = ({
               >
                 {isListening ? <Mic className="h-4 w-4 animate-pulse" /> : <MicOff className="h-4 w-4" />}
               </button>
+              {/* Say why it is silent or deaf. A dead-looking control with no
+                  explanation reads as broken; "no API key" and "this browser
+                  cannot listen" are both setup facts, not faults. */}
               <input
                 type="text"
                 placeholder="Ask CFO e.g., 'Prioritize speed' or 'Explain Kaveri gate failure'..."

@@ -77,6 +77,21 @@ Track 1 added Prisma, Track 2 added Zod, Track 4 will add UI dependencies.
 Nobody owns this file. Pull before installing, and expect to resolve
 `package-lock.json` by re-running `npm install` rather than hand-merging it.
 
+> **The lockfile has broken CI three times, always the same way.** An
+> incremental `npm install` on macOS drops the Linux-only optional packages
+> (`@emnapi/*`) that `sharp` and friends pull in, so `npm ci` on the Ubuntu
+> runner refuses with "Missing: @emnapi/core from lock file". It passes locally
+> and fails in CI every time.
+>
+> If you see that error, do not hand-edit the lockfile:
+>
+> ```bash
+> cd frontend && rm -rf node_modules package-lock.json && npm install
+> ```
+>
+> A full clean install resolves every platform's tree; an incremental one only
+> resolves yours. Verify with `npm ci --dry-run` before pushing.
+
 ### Track 2 edited shared docs
 
 `03-system-design.md` and `05-decisions-needed.md`, to repair text mangled by
