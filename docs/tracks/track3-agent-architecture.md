@@ -1,4 +1,4 @@
-﻿# Track 3 - ElevenLabs Voice AI & NexusX Agents: Architecture / Design Plan
+﻿# Track 3 - ElevenLabs Voice AI & NVIDIA LiteLLM Agents: Architecture / Design Plan
 
 > Source: architect subagent pass over issue #3. Branch: track3/nexus-agents (off dev).
 > Decision log: ai/decisions.md

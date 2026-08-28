@@ -143,7 +143,15 @@ export async function postEntry(input: EntryInput, db: Db = prisma) {
   };
 
   // Only open a transaction if we are not already inside one.
-  return "$transaction" in db ? (db as PrismaClient).$transaction(run) : run(db);
+  //
+  // The timeouts are raised well above Prisma's 5s default because the shared
+  // database is in ap-northeast-1 and a posting is several round trips. Five
+  // seconds is comfortable against localhost and marginal against Tokyo, which
+  // makes the default fail intermittently — the worst kind of failure, since it
+  // passes in development and aborts a seed or a disbursement in the demo.
+  return "$transaction" in db
+    ? (db as PrismaClient).$transaction(run, { timeout: 30_000, maxWait: 15_000 })
+    : run(db);
 }
 
 /**

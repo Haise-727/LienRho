@@ -16,13 +16,17 @@ def complete(settings: NexusSettings, system: str, user: str) -> Optional[str]:
         from litellm import completion
     except Exception:
         return None
-    resp = completion(
-        model=settings.llm_model,
-        messages=[
+    kwargs = {
+        "model": settings.llm_model,
+        "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-    )
+        "api_key": settings.llm_api_key,
+    }
+    if settings.llm_base_url:
+        kwargs["base_url"] = settings.llm_base_url
+    if settings.llm_reasoning_effort:
+        kwargs["extra_body"] = {"reasoning_effort": settings.llm_reasoning_effort}
+    resp = completion(**kwargs)
     return resp.choices[0].message.content

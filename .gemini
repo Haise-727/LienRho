@@ -1,5 +1,8 @@
 # LienRho Antigravity Rules
 
-## Artifacts
-Always create artifacts directly in the repository itself (e.g., in the `docs/` or root directory) instead of using the global default artifact directory (`~/.gemini/...`). 
-When using the `write_to_file` tool to create artifacts, do NOT include the `ArtifactMetadata` property; just write standard markdown files into the repository to ensure they are tracked by version control.
+## Implementation Plans & Artifacts
+1. **Never store plans or artifacts only in global memory (`~/.gemini/...` or brain directories).**
+2. **Always save every implementation plan, sprint plan, and major artifact directly inside the repository under `docs/`.**
+3. **Version and Naming Convention:** Name files clearly according to their domain and version (e.g., `docs/sprint_plan_v1.md`, `docs/track4_implementation_plan_v2.md`, `docs/hackathon_implementation_plan_v3.md`).
+4. Keep previous versions for historical auditability and traceability, incrementing versions (`_v1.md`, `_v2.md`, `_v3.md`) when making major revisions.
+5. Update `docs/README.md` index whenever a new documentation or planning file is added to `docs/`.

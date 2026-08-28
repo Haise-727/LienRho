@@ -5,5 +5,5 @@ sqlalchemy>=2.0
 langgraph>=1.2.11
 httpx>=0.27
 tenacity>=8.0
-# optional: only needed when NEXUS_LLM_ENABLED=true (lazy import; not required to run)
-# litellm>=1.97.0
+# required when NEXUS_LLM_ENABLED=true (lazy import; not required to run offline)
+litellm>=1.97.0
