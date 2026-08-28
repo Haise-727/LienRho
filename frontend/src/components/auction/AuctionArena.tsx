@@ -5,7 +5,7 @@ import { UrgencySlider } from "./UrgencySlider";
 import { WinningBidCard } from "./WinningBidCard";
 import { CollapsibleDisqualifiedBids } from "./CollapsibleDisqualifiedBids";
 import { VoiceAgentWidget } from "@/components/voice/VoiceAgentWidget";
-import { matchOpportunity, MatchApiResponse, ScoredOffer, FALLBACK_MATCH_RESULT } from "@/lib/api-client";
+import { matchOpportunity, MatchApiResponse, ScoredOffer } from "@/lib/api-client";
 import { Sparkles, Activity, ShieldCheck, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -25,7 +25,11 @@ export function AuctionArena({
   sufficiencyFloor = "900000.00",
 }: AuctionArenaProps) {
   const [urgencyNudgeBps, setUrgencyNudgeBps] = useState<number>(initialUrgencyBps);
-  const [matchResult, setMatchResult] = useState<MatchApiResponse>(FALLBACK_MATCH_RESULT);
+  // Null until the engine answers. Seeding this with FALLBACK_MATCH_RESULT
+  // meant an unreachable engine still rendered a finished auction with a winner
+  // and figures (#41).
+  const [matchResult, setMatchResult] = useState<MatchApiResponse | null>(null);
+  const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [audioFeedback, setAudioFeedback] = useState<string | null>(null);
 
@@ -39,6 +43,7 @@ export function AuctionArena({
         const res = await matchOpportunity(opportunityId, urgencyNudgeBps);
         if (isCurrent) {
           setMatchResult(res);
+          setFailed(res === null);
           setLoading(false);
         }
       } catch (err) {
@@ -52,6 +57,29 @@ export function AuctionArena({
       clearTimeout(timer);
     };
   }, [opportunityId, urgencyNudgeBps]);
+
+  // Nothing to show until the engine answers. Rendering the arena around an
+  // empty result would put zeros where money belongs, which reads as a priced
+  // deal worth nothing rather than as an absent one.
+  if (!matchResult) {
+    return (
+      <div className="py-16 text-center">
+        {failed ? (
+          <>
+            <p className="text-sm font-semibold text-slate-900">
+              Could not clear this auction
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              The matching engine did not respond. No offer has been evaluated —
+              nothing shown here would be a real result.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-slate-500">Clearing the auction…</p>
+        )}
+      </div>
+    );
+  }
 
   // Separate winning rank #1 offer from disqualified offers
   const winningOffer = matchResult.scoredOffers.find(
