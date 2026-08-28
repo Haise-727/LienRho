@@ -14,6 +14,20 @@ npx prisma generate         # only if you skipped the install step
 You do **not** need to run `db push` or the seed — the shared database is
 already migrated and seeded. Run them only against your own local Postgres.
 
+## Migrations
+
+`prisma/migrations/0_init` is the baseline, generated from the schema and
+already marked applied on Supabase. Sprint 2 builds Aurora from it:
+
+```bash
+npx prisma migrate deploy    # what CI runs; never `db push` in production
+```
+
+Verified against an empty database: `migrate deploy` creates all 13 tables and
+the seed then runs clean. If you change `schema.prisma`, add a migration with
+`npx prisma migrate dev --name <what-changed>` rather than `db push`, so the
+Aurora path stays reproducible.
+
 ```bash
 npm run db:seed             # re-seed (destructive: wipes marketplace tables)
 npm run db:studio           # browse the data
