@@ -25,4 +25,5 @@ This document tracks all hardcoded data, mock state, and architectural shortcuts
 ## 5. Static Provider Bidding (No Dynamic Pricing)
 *   **Location:** `ai/nexus/providers.py`
 *   **The Debt:** Capital providers do not dynamically price risk. Their bids are copied from a frozen dataclass. Every provider quotes identically for every invoice and never declines.
-*   **The Fix:** Implement the NVIDIA LiteLLM integration to allow providers to dynamically adjust their `annual_rate_bps` and `advance_rate_bps` based on the specific Buyer's credit profile and the Supplier's `VerificationTier`.
+*   **The Fix:** Give each provider a deterministic pricing function that reads its own mandate (`costOfFunds`, `hurdleRate`, `riskAppetiteFloor`, concentration headroom) together with the opportunity's `probabilityOfDefault` and `VerificationTier`, and returns terms — or a decline when the risk-adjusted return misses the hurdle.
+*   **Note the boundary:** an LLM must **not** set `annual_rate_bps` or `advance_rate_bps`. It may select *posture* — aggressive, conservative, decline — and the pricing function turns that posture plus the mandate into figures. "No model computes a financial figure" is the project's first non-negotiable, and dynamic pricing is exactly where it would be easiest to breach by accident. See `docs/13-layering.md`.
