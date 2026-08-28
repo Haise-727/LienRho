@@ -1,3 +1,12 @@
+﻿import sys
+from pathlib import Path
+
+# Expose the standalone `ai` package (repo root) so backend modules can import
+# the NexusX AI layer across the package boundary (separation of concerns).
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 import asyncio
 import contextlib
 from contextlib import asynccontextmanager
@@ -16,7 +25,7 @@ from app.sync.scheduler import run_scheduled_sync, should_run
 async def lifespan(_: FastAPI):
     """Own the background sync task for the life of the process (FR-001).
 
-    Started here rather than at import so it exists only in a running server —
+    Started here rather than at import so it exists only in a running server â€”
     a test client, an Alembic run, or the OpenAPI dump must not spawn a loop
     that reaches out to someone's accounting system.
     """
@@ -49,3 +58,4 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(api_router)
+
