@@ -26,6 +26,7 @@ import { fail } from '@/lib/serialize';
 import { lenderBidProviderNames, lenderBidToOffer } from '@/lib/market/agent-adapter';
 import type { LenderBidPayload } from '@/lib/market/agent-adapter';
 import { scoreOffers } from '@/lib/market/score';
+import { analyseFrontier, degeneracyWarning } from '@/lib/market/pareto';
 import {
   clearById,
   faceValuePaiseFor,
@@ -110,6 +111,19 @@ function scoreAgentBids({
     urgencyNudgeBps,
   });
 
+  // Same dominance analysis the stored path runs. Agent bids are the likelier
+  // source of a degenerate set, since they come from a generator rather than
+  // from distinct real providers — so this is exactly where the guard earns its
+  // place (see #17, where a 10x fee constant skewed every agent bid at once).
+  const analysis = analyseFrontier(scoredOffers);
+  for (const offer of scoredOffers) {
+    offer.dominatedBy = analysis.dominatedBy[offer.offer.id] ?? null;
+  }
+  const market = {
+    frontier: analysis.frontier,
+    degeneracyWarning: degeneracyWarning(analysis, scoredOffers),
+  };
+
   if (survivors.length === 0) {
     return {
       status: 'NO_ACCEPTABLE_OFFER',
@@ -117,6 +131,7 @@ function scoreAgentBids({
       scoredOffers,
       utility,
       reason: 'No agent bid cleared the supplier gates',
+      market,
     };
   }
 
@@ -135,6 +150,7 @@ function scoreAgentBids({
     ],
     scoredOffers,
     utility,
+    market,
   };
 }
 

@@ -20,6 +20,7 @@
 import { prisma } from '@/lib/db';
 
 import { clearOpportunity } from './clear';
+import type { ProviderCapacity } from './allocate';
 import { decimalToPaise } from './prisma-adapter';
 import { deriveSupplierUtility, supplierUtilityFromStored } from './utility';
 import type { Bps, MatchResult } from './types';
@@ -115,7 +116,49 @@ export async function clearById(
     include: { provider: { select: { id: true, name: true } } },
   });
 
+  // Provider capacity, read fresh at clearing time rather than trusted from bid
+  // time. A provider's position moves: they may have funded something else, or
+  // hit a concentration cap on this buyer, since they quoted.
+  //
+  // NOTE: this read and the allocation it feeds are not yet wrapped in a
+  // transaction, so two opportunities clearing concurrently could both believe
+  // they have the same liquidity. That is the atomic-allocation work in
+  // 03-system-design.md Module 8 and it belongs here, at the I/O boundary —
+  // allocate() itself is pure and cannot fix it.
+  const providers = await prisma.capitalProvider.findMany({
+    where: { id: { in: bids.map((b) => b.providerId) } },
+    select: {
+      id: true,
+      availableLiquidity: true,
+      minTicket: true,
+      maxTicket: true,
+      concentrationLimitPct: true,
+      totalLiquidity: true,
+    },
+  });
+
+  const capacities: Record<string, ProviderCapacity> = Object.fromEntries(
+    providers.map((p) => [
+      p.id,
+      {
+        providerId: p.id,
+        availableLiquidityPaise: decimalToPaise(p.availableLiquidity.toString()),
+        minTicketPaise: decimalToPaise(p.minTicket.toString()),
+        maxTicketPaise: decimalToPaise(p.maxTicket.toString()),
+        // Concentration headroom is modelled as a share of the total book. The
+        // exposure already taken against this buyer is not tracked yet, so this
+        // is the cap rather than the remainder — it will bind correctly for a
+        // first deal and is optimistic afterwards. Flagged rather than hidden.
+        buyerHeadroomPaise: Math.round(
+          decimalToPaise(p.totalLiquidity.toString()) *
+            Number(p.concentrationLimitPct),
+        ),
+      },
+    ]),
+  );
+
   return clearOpportunity({
+    capacities,
     opportunity: {
       id: opportunity.id,
       invoice: { faceValue: opportunity.invoice.faceValue.toString() },

@@ -172,6 +172,9 @@ export function scoreOffers({
       gates: { sufficiency, timing },
       disqualified: !sufficiency.passed || !timing.passed,
       rank: null,
+      // Filled in by the dominance pass in clear.ts. Null here means "not yet
+      // analysed", which is also the correct value for an offer on the frontier.
+      dominatedBy: null,
     };
   });
 
