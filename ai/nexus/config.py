@@ -14,6 +14,7 @@ class NexusSettings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     llm_base_url: str | None = None
     llm_api_key: str | None = None
+    llm_reasoning_effort: str | None = None
 
     matching_mode: str = "mock"  # "mock" | "http"
     matching_url: str | None = None
