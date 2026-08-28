@@ -1,0 +1,52 @@
+[
+  {
+    "provider_id": "L1",
+    "provider_name": "CapitalFirst",
+    "advance_rate": 0.80,
+    "apr": 0.09,
+    "fees_paise": 2000000,
+    "tenor_days": 45,
+    "recourse": true,
+    "disbursal_latency_hours": 48
+  },
+  {
+    "provider_id": "L2",
+    "provider_name": "QuickFund",
+    "advance_rate": 0.97,
+    "apr": 0.16,
+    "fees_paise": 2500000,
+    "tenor_days": 15,
+    "recourse": false,
+    "disbursal_latency_hours": 6
+  },
+  {
+    "provider_id": "L3",
+    "provider_name": "StableTrust",
+    "advance_rate": 0.72,
+    "apr": 0.10,
+    "fees_paise": 100000,
+    "tenor_days": 30,
+    "recourse": true,
+    "disbursal_latency_hours": 36
+  },
+  {
+    "provider_id": "L4",
+    "provider_name": "AegisCapital",
+    "advance_rate": 0.92,
+    "apr": 0.18,
+    "fees_paise": 3000000,
+    "tenor_days": 30,
+    "recourse": false,
+    "disbursal_latency_hours": 24
+  },
+  {
+    "provider_id": "L5",
+    "provider_name": "BalancedFinance",
+    "advance_rate": 0.90,
+    "apr": 0.12,
+    "fees_paise": 1500000,
+    "tenor_days": 30,
+    "recourse": true,
+    "disbursal_latency_hours": 18
+  }
+]

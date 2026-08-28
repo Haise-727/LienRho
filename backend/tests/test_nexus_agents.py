@@ -120,8 +120,65 @@ def test_http_matching_client_maps_response(monkeypatch):
         "recourse": True,
         "confidence": 0.9,
     })
-    result = HttpMatchingClient("http://x").match("O1", [bid])
+    sup = _supplier()
+    result = HttpMatchingClient("http://x").match("O1", [bid], sup, sup.invoice_amount_paise)
     assert result.matched is True
     assert result.matched_bid_ref == "P"
     assert result.score == 0.9
     assert result.simulated is False
+
+
+def test_underfunded_provider_excluded_from_ranking():
+    """Provider L3 advances only 72% but the supplier needs 80% of the invoice, so
+    its gross advance does NOT cover the cash need. It must be flagged
+    disqualified/ineligible and kept out of the ranking."""
+    sup = _supplier(due_in_days=15, cash_ratio=0.8)
+    req = ClearingRequest.model_validate({
+        "opportunityId": "O-UNDER",
+        "supplier": sup.model_dump(by_alias=True),
+        "bids": [],
+    })
+    agent = MarketClearingAgent(matching=MockMatchingClient())
+    result = agent.run(req)
+    underfunded = next((c for c in result.ranked_bids if c.provider_id == "L3"), None)
+    assert underfunded is not None
+    assert underfunded.disqualified is True
+    assert underfunded.disqualify_reason is not None
+    assert "cash" in underfunded.disqualify_reason.lower()
+
+
+def test_underfunded_provider_never_wins():
+    """An under-funded provider (advance*invoice < cash_need) must never be selected
+    as the winner, even though it may have a tempting headline APR."""
+    sup = _supplier(due_in_days=15, cash_ratio=0.8)
+    req = ClearingRequest.model_validate({
+        "opportunityId": "O-NEVER",
+        "supplier": sup.model_dump(by_alias=True),
+        "bids": [],
+    })
+    agent = MarketClearingAgent(matching=MockMatchingClient())
+    result = agent.run(req)
+    assert result.match.matched is True
+    # L3 (72% advance) cannot cover an 80% cash need -> must not win.
+    assert result.match.matched_bid_ref != "L3"
+    winner = next((c for c in result.ranked_bids if c.is_winner), None)
+    assert winner is not None
+    assert "advance does not cover" not in (winner.disqualify_reason or "")
+
+
+def test_highest_advance_fallback_when_no_provider_covers_cash_need():
+    """If NO provider's advance covers the cash need, the engine falls back to the
+    single highest-advance funder and flags it in the result reasoning."""
+    sup = _supplier(due_in_days=15, cash_ratio=0.99)
+    req = ClearingRequest.model_validate({
+        "opportunityId": "O-FALLBACK",
+        "supplier": sup.model_dump(by_alias=True),
+        "bids": [],
+    })
+    agent = MarketClearingAgent(matching=MockMatchingClient())
+    result = agent.run(req)
+    assert result.match.matched is True
+    # L2 has the highest advance_rate (0.97) among the panel.
+    assert result.match.matched_bid_ref == "L2"
+    assert "fallback" in result.match.notes.lower()
+    assert any("fallback" in t.lower() for t in result.agent_trace)

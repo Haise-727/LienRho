@@ -1,4 +1,4 @@
-﻿# NexusX AI layer - isolated dependencies (separation of concerns from backend/app)
+# NexusX AI layer - isolated dependencies (separation of concerns from backend/app)
 pydantic>=2.9
 pydantic-settings>=2.6
 sqlalchemy>=2.0

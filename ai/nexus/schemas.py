@@ -96,6 +96,27 @@ class ClearingRequest(BaseModel):
     bids: List[LenderBid] = Field(default_factory=list, alias="bids")
 
 
+class BidComparison(BaseModel):
+    """Per-bid comparison row for the clearing output (camelCase).
+
+    effectiveAnnualCostPct is a deterministic percentage (0..100s) of the supplier's
+    true annualized cost. disqualified/disqualifyReason flag bids that failed a gate.
+    isWinner marks the matched bid. NO financial figure here comes from an LLM (D5).
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    provider_id: str = Field(alias="providerId")
+    provider_name: str = Field(alias="providerName")
+    advance_rate: float = Field(alias="advanceRate")
+    apr: float = Field(alias="apr")
+    fees_paise: int = Field(alias="feesPaise")
+    effective_annual_cost_pct: float = Field(alias="effectiveAnnualCostPct")
+    disqualified: bool = Field(alias="disqualified")
+    disqualify_reason: Optional[str] = Field(default=None, alias="disqualifyReason")
+    is_winner: bool = Field(alias="isWinner")
+
+
 class ClearingResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -105,6 +126,9 @@ class ClearingResult(BaseModel):
     match: MatchResult = Field(alias="match")
     clearing_summary: str = Field(alias="clearingSummary")
     simulated: bool = Field(default=False, alias="simulated")
+    ranked_bids: List[BidComparison] = Field(default_factory=list, alias="rankedBids")
+    thesis_note: str = Field(default="", alias="thesisNote")
+    agent_trace: List[str] = Field(default_factory=list, alias="agentTrace")
 
 
 class SignedUrlResponse(BaseModel):

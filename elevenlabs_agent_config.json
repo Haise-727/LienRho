@@ -1,0 +1,73 @@
+{
+  "agent_name": "NexusX CFO Voice",
+  "conversation_config": {
+    "agent": {
+      "prompt": {
+        "prompt": "You are the LienRho invoice-financing voice assistant. Greet the caller warmly. Then collect exactly these five details, one at a time, waiting for the caller's answer after each question:\n1. Supplier ID (for example S1)\n2. Invoice amount in INR\n3. Cash needed now in INR\n4. Invoice due date as YYYY-MM-DD\n5. Credit terms in days\n\nOnce you have all five values, repeat them back to the caller and ask them to confirm that they are correct. After the caller confirms, call the `request_advance` tool with those five values. When the tool returns, read the `result` field back to the caller VERBATIM, word for word, without changing or summarizing it. Never compute, estimate, or round any financial number yourself; only relay exactly what the tool returns. If no offer is found, say so plainly. Keep spoken turns short and natural. This is informational, not financial advice.",
+        "tools": [
+          {
+            "type": "webhook",
+            "name": "request_advance",
+            "description": "Request an invoice-financing advance from the LienRho clearing engine for a given supplier and invoice.",
+            "api_schema": {
+              "url": "<NGROK_URL>/api/voice/clearing",
+              "method": "POST",
+              "request_headers": {},
+              "request_body_schema": {
+                "type": "object",
+                "properties": {
+                  "supplierId": {
+                    "type": "string",
+                    "description": "Supplier identifier, for example S1."
+                  },
+                  "invoiceAmount": {
+                    "type": "number",
+                    "description": "Total invoice amount in INR rupees."
+                  },
+                  "cashNeed": {
+                    "type": "number",
+                    "description": "Cash the supplier needs now in INR rupees."
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Invoice due date in YYYY-MM-DD format."
+                  },
+                  "creditDays": {
+                    "type": "number",
+                    "description": "Credit terms in days."
+                  }
+                },
+                "required": [
+                  "supplierId",
+                  "invoiceAmount",
+                  "cashNeed",
+                  "dueDate",
+                  "creditDays"
+                ]
+              }
+            },
+            "response_filter": {
+              "mode": "allow",
+              "filters": ["result"]
+            },
+            "execution_mode": "immediate",
+            "force_pre_tool_speech": true,
+            "pre_tool_speech": "Thanks, let me request your advance from the clearing engine now.",
+            "tool_error_handling_mode": "auto",
+            "timeout": 30
+          }
+        ]
+      },
+      "first_message": "Hi, I'm your LienRho invoice-financing assistant. I can help you request an advance on an invoice. First, what is your supplier ID?",
+      "language": "en"
+    },
+    "tts": {
+      "model_id": "eleven_turbo_v2",
+      "voice_id": "REPLACE_WITH_YOUR_VOICE_ID"
+    },
+    "asr": {
+      "model_id": "eleven_multilingual_v2"
+    }
+  }
+}

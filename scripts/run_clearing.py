@@ -29,7 +29,7 @@ def main() -> int:
         "invoiceAmountPaise": 10_000_000,
         "dueDate": (date.today() + timedelta(days=10)).isoformat(),
         "creditDays": 45,
-        "cashNeedPaise": 8_000_000,
+        "cashNeedPaise": 5_000_000,
     })
 
     print("=" * 72)
@@ -43,11 +43,11 @@ def main() -> int:
     print("    output:", verdict.model_dump(by_alias=True))
     print("    took  :", _ms(t0))
 
-    print("\n[2] LenderBiddingAgent.generate_bid  (one bid per provider)")
+    print("\n[2] LenderBiddingAgent.generate_bid  (one bid per provider, risk-loaded)")
     bids = []
     for p in DEFAULT_PROVIDERS:
         tb = time.perf_counter()
-        bid = LenderBiddingAgent().generate_bid(sup, p)
+        bid = LenderBiddingAgent().generate_bid(sup, p, urgency_factor=verdict.factor)
         bids.append(bid)
         print(f"    - {p.provider_name:24s} -> {bid.model_dump(by_alias=True)}  ({_ms(tb)})")
 
