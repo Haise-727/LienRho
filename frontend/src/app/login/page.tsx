@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("supplier@vertex.corp");
+  const [email, setEmail] = useState("ops@vertexcomponents.example");
   const [password, setPassword] = useState("password123");
   const [submitting, setSubmitting] = useState(false);
 
@@ -58,7 +58,7 @@ function LoginForm() {
         <div className="grid grid-cols-2 gap-2.5">
           <button
             type="button"
-            onClick={() => handleLogin("supplier@vertex.corp")}
+            onClick={() => handleLogin("ops@vertexcomponents.example")}
             disabled={submitting}
             className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
           >
@@ -72,7 +72,7 @@ function LoginForm() {
 
           <button
             type="button"
-            onClick={() => handleLogin("provider@rapidfin.com")}
+            onClick={() => handleLogin("desk@rapidfin.example")}
             disabled={submitting}
             className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
           >
@@ -86,7 +86,7 @@ function LoginForm() {
 
           <button
             type="button"
-            onClick={() => handleLogin("lender@kaveri.com")}
+            onClick={() => handleLogin("desk@kavericapital.example")}
             disabled={submitting}
             className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
           >
@@ -100,7 +100,7 @@ function LoginForm() {
 
           <button
             type="button"
-            onClick={() => handleLogin("bank@meridian.com")}
+            onClick={() => handleLogin("desk@meridianbank.example")}
             disabled={submitting}
             className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
           >
