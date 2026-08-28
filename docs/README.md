@@ -47,7 +47,7 @@ understanding the product.
 
 | Doc | Track |
 |---|---|
-| [`tracks/track3-agent-architecture.md`](tracks/track3-agent-architecture.md) | Voice AI and the NVIDIA LiteLLM agent design |
+| [`tracks/track3-agent-architecture.md`](tracks/track3-agent-architecture.md) | Voice AI and the multi-agent design (LangGraph + LiteLLM) |
 | [`tracks/track3-nexusx-internals.md`](tracks/track3-nexusx-internals.md) | How the agent layer works internally |
 | [`tracks/track3-build-summary.md`](tracks/track3-build-summary.md) | What was built and why |
 | [`tracks/track3-matching-explained.md`](tracks/track3-matching-explained.md) | Where matching sits relative to the agents |

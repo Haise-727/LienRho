@@ -46,12 +46,12 @@ development runs Postgres and Redis under Docker Compose.
 - **Multi-Attribute Utility / Pareto Matching Algorithm**
 - **Redis atomic distributed locking**
 
-### ~~NVIDIA LiteLLM~~ → LiteLLM — ✅ Changed
+### Agent layer — ✅ Changed: NexusX dropped, LiteLLM retained
 - **Autonomous multi-agent coordination** (Supplier, Lender, Market Clearing),
   on LangGraph, with model access through **LiteLLM**.
 
-**Decision:** NVIDIA LiteLLM is dropped as a sponsor integration. Model calls go through
-LiteLLM directly.
+**Decision:** NexusX is dropped as a sponsor integration. Model access goes
+through **LiteLLM**, which is what the code already used.
 
 Worth being clear that this is a **claims change, not an architecture change** —
 `ai/nexus/llm.py` already does `from litellm import completion` behind a single
@@ -103,12 +103,13 @@ capacity (`03-system-design.md` Module 8).
   frontier logic **is** the deterministic-algorithms showcase. The Redis lock is
   supporting infrastructure, not the demonstration.
 
-**NVIDIA LiteLLM — still the least defined of the four.** Candidate roles: provider or
-supplier identity verification, or a multi-agent routing/gateway layer
-dispatching extraction, constraint-checking and scoring with unified
-cost/latency tracking.
-- *Open:* same as Stitch — confirm what the product actually does before
-  assigning it a role in the architecture.
+**Agent layer (was NexusX).** The sponsor slot is dropped; what remains is the
+thing that was always doing the work — LangGraph for coordination, LiteLLM for
+model access. Candidate roles previously sketched for the sponsor (identity
+verification, a routing/gateway layer with unified cost and latency tracking)
+are now just optional features, not an integration we owe anyone.
+- *Settled:* no product-identity question remains here, because there is no
+  longer a third-party product to identify.
 
 ---
 

@@ -112,8 +112,11 @@ Provider agents price within their mandates, producing offers that vary across
 rate, advance rate, fees, tenor, settlement speed, recourse, and repayment
 structure.
 
-NVIDIA LiteLLM multi-agent coordination runs the bidding, with one agent per provider
-evaluating inside its own mandate.
+Multi-agent coordination runs the bidding — one agent per provider, evaluating
+inside its own mandate — orchestrated with LangGraph, with model access through
+LiteLLM. Neither is load-bearing for correctness: LangGraph sequences the work
+and LiteLLM routes the call, while every figure comes from a deterministic
+function below.
 
 **The agent decides posture — aggressive, conservative, decline — and
 deterministic functions compute every number.** This is the old tool boundary,
