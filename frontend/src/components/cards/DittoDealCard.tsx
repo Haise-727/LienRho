@@ -95,8 +95,18 @@ export const DittoDealCard: React.FC<DittoDealCardProps> = ({
           }`}>
             {deal.speedBadge}
           </span>
+          {/* Rank, not a utility score. There is no single number summarising an
+              offer here by design: sufficiency and timing are gates, and cost
+              ranks whatever survives them. A 0-100 score would flatten those
+              back into the weighted average this product exists to argue
+              against. */}
           <span className="text-[11px] text-neutral-400 mt-1 font-medium">
-            Utility Score: {(deal.score * 100).toFixed(0)}/100
+            {deal.isDisqualified
+              ? "Disqualified"
+              : deal.rank === 1
+                ? "Best on true cost"
+                : `Rank ${deal.rank} on true cost`}
+            {deal.isDominated && " · dominated"}
           </span>
         </div>
       </div>
