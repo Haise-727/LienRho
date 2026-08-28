@@ -1,36 +1,27 @@
-# Transition — CSI ORIGIN 2026, Problem Statement 5
+# Docs — LienRho, CSI ORIGIN 2026 Problem Statement 5
 
-Planning workspace for moving from the current receivables-decision product to
-**PS-5: Building a Competitive Capital Market for Supply-Chain Working Capital**.
-
-Nothing here is code and nothing here is committed. This folder sits *outside*
-the existing repository on purpose: the intent is a fresh repository with no
-links or history back to the previous project, and a planning folder living
-inside the old repo would itself be a trace.
+Planning and design docs for the pivot from the earlier receivables-decision
+product to **PS-5: Building a Competitive Capital Market for Supply-Chain
+Working Capital**. `Problem_Statement_5.pdf` in this folder is the original
+brief.
 
 ## Read in this order
 
 | Doc | What it answers |
 |---|---|
 | [`00-brief.md`](00-brief.md) | What changed, why it's a different product, the one-line thesis |
-| [`01-commerce-analysis.md`](01-commerce-analysis.md) | How this market actually works commercially — the economics, the arithmetic, auction design, regulatory reality |
+| [`01-commerce-analysis.md`](01-commerce-analysis.md) | How this market actually works commercially — the economics, the worked example, auction design, anti-fraud checks, regulatory reality |
 | [`02-carryover-audit.md`](02-carryover-audit.md) | What survives from the old build, what dies, what's genuinely new |
-| [`03-system-design.md`](03-system-design.md) | Proposed architecture, modules, agents, data model |
+| [`03-system-design.md`](03-system-design.md) | Architecture, modules, agents, data model, the full opportunity lifecycle state machine |
 | [`04-build-plan.md`](04-build-plan.md) | Scope, phases, demo-able checkpoints, demo narrative |
-| [`05-decisions-needed.md`](05-decisions-needed.md) | Open questions only the team can settle — AWS/infra and sponsor integrations are **on hold**, see decisions below |
+| [`05-decisions-needed.md`](05-decisions-needed.md) | Open questions and resolved decisions — infra and sponsor integrations are on hold, see below |
 | [`06-implementation-plan.md`](06-implementation-plan.md) | **Start here for actual work.** What's transferred and verified working, what to remove/rework, and the 4-way split for phase 1 |
 
-## Decisions made so far
+## Decisions made so far (see `05-decisions-needed.md` for the reasoning)
 
+- **Name:** staying **LienRho**.
 - **Infra:** deferred. Local/deterministic (FastAPI + Postgres + Docker Compose) until the core marketplace logic works — no AWS commitment yet.
-- **Sponsor integrations** (ElevenLabs voice, CodeCrafters Rust/Go engine, NexusX): deferred until phases 0–3 of `04-build-plan.md` are solid.
-- **Name:** staying **LienRho** — no rename across docs needed.
-
-## Naming
-
-Docs use **`«PROJECT»`** as a placeholder throughout rather than inventing a
-name, so they can be dropped into the new repo and find-replaced once. Name
-candidates are in [`05-decisions-needed.md`](05-decisions-needed.md).
+- **Sponsor integrations** (ElevenLabs, Stitch, CodeCrafters, NexusX): deferred until phases 0–3 of `04-build-plan.md` are solid. Note: what Stitch and NexusX's products actually *are* is still unconfirmed — don't design around either guess yet.
 
 ## The honest framing
 
