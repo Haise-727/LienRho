@@ -7,9 +7,8 @@ Written to be read by a person joining the project and by an AI agent working
 in the repo. Every invariant is stated explicitly rather than left implicit in
 the code, and every non-obvious design decision carries its reason.
 
-> **Read §12 before deploying anything.** There are no user accounts and no
-> access control in this database — a working login screen exists, which makes
-> that easy to miss.
+> **Read §12 before deploying anything.** The `User` allowlist now exists, but
+> **no API route enforces it yet** — every marketplace endpoint is still open.
 
 - **Schema source of truth:** [`frontend/prisma/schema.prisma`](../frontend/prisma/schema.prisma)
 - **Seed / demo fixture:** [`frontend/prisma/seed.ts`](../frontend/prisma/seed.ts)
@@ -89,6 +88,7 @@ Thirteen models in four groups.
 
 | Group | Models | Purpose |
 |---|---|---|
+| **Identity** | `User`, `VerificationDocument` | Who may sign in, and the KYB evidence behind an org |
 | **Base** | `Organization`, `Customer`, `Invoice` | Who the parties are and what is owed |
 | **Marketplace** | `CapitalProvider`, `FinancingOpportunity`, `Bid`, `Match` | The auction: mandates, listings, competing offers, the winner |
 | **Supplier need** | `SupplierCashPosition`, `CashObligation` | Raw cash facts the utility derivation reads |
@@ -186,6 +186,47 @@ about its limits: it catches the *same* invoice under an unchanged identifier.
 It does **not** catch a fabricated near-duplicate with a tweaked invoice number
 — that needs `threeWayMatched` doing its job. The two checks are complementary,
 not redundant.
+
+---
+
+### `User` — the sign-in allowlist
+
+Supabase Auth owns the credential; this table owns the mapping from a verified
+identity to an `Organization`. **No password is stored here** — the OAuth
+provider is the only thing that ever sees one.
+
+| Field | Notes |
+|---|---|
+| `email` | **unique.** Two orgs sharing one login would make "which org is this request for" ambiguous, and that question must have exactly one answer |
+| `supabaseUserId` | `auth.users.id`, a UUID. **Null until first sign-in** — rows are seeded from the allowlist before anyone authenticates. Matching on this once set means a Google account that changes its primary address keeps its session |
+| `role` | `OWNER` can act for the org; `MEMBER` is read-only today |
+
+**Allowlist, not self-registration.** You do not get to self-declare as a bank
+on a capital marketplace, and open sign-up would make `Organization.type`
+meaningless as a trust boundary. Seven users are seeded, one per org — replace
+them with real addresses before demoing OAuth or nobody can get in.
+
+### `VerificationDocument` — KYB evidence
+
+One uploaded document and what a model read out of it.
+
+**The division of labour is the project's spine:** the model **extracts** text;
+the comparison against the org's recorded details and the decision to promote a
+verification tier are **deterministic**. An LLM never decides that a business is
+verified.
+
+| Field | Notes |
+|---|---|
+| `storagePath` | Supabase Storage object path. The file never enters Postgres — a scanned PDF in a row makes every query touching the table expensive |
+| `extractedName` / `extractedTaxId` / `extractedAddress` | Stored **verbatim**, not just the verdict, so "why was this accepted" stays answerable later |
+| `matchConfidence` | Recorded even when below threshold — a near-miss is the interesting case for anyone tuning it |
+| `thresholdApplied` | The threshold in force at decision time, so raising it later doesn't silently rewrite past decisions |
+| `extractionModel` | Which model produced it, so a bad batch is traceable |
+| `reviewedBy` | Null when automated; set for the human exception path |
+
+`status` distinguishes **`REJECTED`** (extraction worked, records disagreed)
+from **`ERROR`** (extraction itself failed — unreadable file, model timeout).
+Only the second makes a retry legitimate.
 
 ---
 
@@ -653,8 +694,10 @@ CLI, because DDL cannot run through the pooler. See
 
 ## 12. User accounts and access control — the known gap
 
-**There are no user accounts in this database, and no marketplace endpoint
-performs any authorization check.**
+**Update (this sprint):** the `User` allowlist and `VerificationDocument`
+tables now exist — see §4 — so #25 and #26 are unblocked. What follows still
+holds for everything else: **no marketplace endpoint performs any
+authorization check.**
 
 This is documented at length rather than in a footnote because a working login
 screen exists, which makes the gap easy to mistake for solved.

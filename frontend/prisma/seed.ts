@@ -104,6 +104,8 @@ async function main() {
   await prisma.invoice.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.capitalProvider.deleteMany();
+  await prisma.verificationDocument.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.account.deleteMany();
   await prisma.organization.deleteMany();
 
@@ -258,6 +260,45 @@ async function main() {
     const owner = b.slug === "orion-retail" ? distressed : supplier;
     const c = await prisma.customer.create({ data: { ...b, orgId: owner.id } });
     buyers[b.slug] = { id: c.id, taxId: b.taxId };
+  }
+
+  // ---------------------------------------------------------- sign-in allowlist
+  //
+  // Supabase Auth owns the credential; these rows own the mapping from a
+  // verified Google identity to an Organization (#25). `supabaseUserId` stays
+  // null until the person first signs in — the callback matches on email, then
+  // stamps the Supabase UUID so later sessions match on that instead.
+  //
+  // An allowlist rather than self-registration: you do not get to self-declare
+  // as a bank on a capital marketplace. Replace these with real team addresses
+  // before demoing OAuth, or nobody can get in.
+
+  const allowlist: { email: string; displayName: string; org: string; role: "OWNER" | "MEMBER" }[] = [
+    { email: "ops@vertexcomponents.example", displayName: "Vertex Components — Ops", org: SUPPLIER, role: "OWNER" },
+    { email: "finance@kalingaprecision.example", displayName: "Kalinga Precision — Finance", org: SUPPLIER2, role: "OWNER" },
+    { email: "desk@meridianbank.example", displayName: "Meridian Bank — Origination", org: "meridian-bank", role: "OWNER" },
+    { email: "desk@kavericapital.example", displayName: "Kaveri Capital — Desk", org: "kaveri-capital", role: "OWNER" },
+    { email: "desk@rapidfin.example", displayName: "Rapidfin — Desk", org: "rapidfin", role: "OWNER" },
+    { email: "desk@ashwincredit.example", displayName: "Ashwin Credit Fund — Desk", org: "ashwin-credit-fund", role: "OWNER" },
+    { email: "admin@lienrho.example", displayName: "LienRho — Platform", org: PLATFORM_SLUG, role: "OWNER" },
+  ];
+
+  const orgIdBySlug: Record<string, string> = {
+    [SUPPLIER]: supplier.id,
+    [SUPPLIER2]: distressed.id,
+    [PLATFORM_SLUG]: platform.id,
+    ...Object.fromEntries(providerSeeds.map((p) => [p.slug, providers[p.slug].orgId])),
+  };
+
+  for (const u of allowlist) {
+    await prisma.user.create({
+      data: {
+        email: u.email,
+        displayName: u.displayName,
+        role: u.role,
+        orgId: orgIdBySlug[u.org],
+      },
+    });
   }
 
   // ------------------------------------------------- supplier cash positions
@@ -738,6 +779,7 @@ Seed complete.
   invoices          ${await prisma.invoice.count()}
   opportunities     ${await prisma.financingOpportunity.count()}
   bids              ${await prisma.bid.count()}
+  users             ${await prisma.user.count()}
   cash positions    ${await prisma.supplierCashPosition.count()}
   cash obligations  ${await prisma.cashObligation.count()}
   accounts          ${await prisma.account.count()}

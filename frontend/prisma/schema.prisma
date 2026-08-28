@@ -21,6 +21,126 @@ datasource db {
   // and `migrate` go direct on 5432 via DIRECT_URL.
 }
 
+// ----------------------------------------------------------------------- auth
+//
+// Supabase Auth owns the credential; this table owns the mapping from a
+// verified identity to an Organization. Nothing here stores a password — the
+// OAuth provider is the only thing that ever sees one.
+//
+// The model is an ALLOWLIST, not self-registration: a person can sign in only
+// if their email is already attached to an org. You do not get to self-declare
+// as a bank on a capital marketplace, and an open sign-up would make
+// `Organization.type` meaningless as a trust boundary.
+
+enum UserRole {
+  /// Can act for the org — accept an offer, submit a bid.
+  OWNER
+  /// Read-only today. Kept so the distinction exists before it is needed.
+  MEMBER
+}
+
+model User {
+  id String @id @default(cuid())
+
+  /// The Google identity, matched on OAuth callback. Unique because two orgs
+  /// sharing one login would make "which org is this request for" ambiguous,
+  /// and that question has to have exactly one answer.
+  email String @unique
+
+  /// `auth.users.id` from Supabase — a UUID, not a cuid. Null until the person
+  /// first signs in, because rows are seeded from the allowlist before anyone
+  /// has authenticated. Matching on this rather than on email once it is set
+  /// means a Google account that changes its primary address keeps its session.
+  supabaseUserId String? @unique
+
+  displayName String?
+  avatarUrl   String?
+  orgId       String
+  role        UserRole @default(MEMBER)
+
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+/// One uploaded KYB document and what a model read out of it.
+///
+/// The division of labour matters and is the project's spine: the model
+/// EXTRACTS text from the document; the comparison against the org's recorded
+/// details and the decision to promote a verification tier are DETERMINISTIC
+/// (see docs/00-brief.md). An LLM never decides that a business is verified.
+///
+/// The extraction is stored verbatim rather than only its verdict, so a
+/// promotion can be re-examined later — "why was this accepted" has to be
+/// answerable after the fact, which is the same reason journal entries are
+/// immutable.
+model VerificationDocument {
+  id    String       @id @default(cuid())
+  orgId String
+  kind  DocumentKind
+
+  /// Object path in Supabase Storage. The file itself never enters Postgres —
+  /// a scanned PDF in a row makes every query that touches the table expensive.
+  storagePath String
+  mimeType    String?
+  sizeBytes   Int?
+
+  status VerificationStatus @default(PENDING)
+
+  /// What the model read. Null while PENDING, and null on an extraction that
+  /// failed — distinguishable via `status`, not by guessing from empty strings.
+  extractedName    String?
+  extractedTaxId   String?
+  extractedAddress String?
+
+  /// Agreement between the extraction and the org's recorded details, 0..1.
+  /// Recorded even when it falls short of the promotion threshold, because a
+  /// near-miss is the interesting case for anyone tuning it.
+  matchConfidence Decimal? @db.Decimal(9, 6)
+  /// The threshold in force when this was decided. Stored rather than assumed
+  /// constant, so raising it later does not silently rewrite past decisions.
+  thresholdApplied Decimal? @db.Decimal(9, 6)
+
+  /// Which model produced the extraction, so a bad batch is traceable to it.
+  extractionModel String?
+  /// Null when the decision was automated. Set for the exception path the
+  /// annexure reserves for humans.
+  reviewedBy String?
+  /// Why it was rejected, in language safe to show the uploader.
+  rejectionReason String?
+
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([status])
+}
+
+enum DocumentKind {
+  GST_CERTIFICATE
+  PAN_CARD
+  CERTIFICATE_OF_INCORPORATION
+  BANK_STATEMENT
+  UDYAM_REGISTRATION
+}
+
+enum VerificationStatus {
+  /// Uploaded, not yet processed.
+  PENDING
+  /// Extraction succeeded and cleared the threshold.
+  VERIFIED
+  /// Extraction succeeded but disagreed with the org's records.
+  REJECTED
+  /// Extraction itself failed — unreadable file, model error, timeout.
+  /// Distinct from REJECTED: nothing was judged, so a retry is legitimate.
+  ERROR
+}
+
 // ---------------------------------------------------------------- base entities
 
 enum OrgType {
@@ -48,6 +168,8 @@ model Organization {
   accounts      Account[]
   opportunities FinancingOpportunity[]
   cashPositions SupplierCashPosition[]
+  users         User[]
+  documents     VerificationDocument[]
 
   @@index([type])
 }
