@@ -240,6 +240,179 @@ export const treasuryTools = {
     },
   }),
 
+  getCashPosition: tool({
+    description:
+      "Return the supplier's cash position behind an auction: cash on hand, buffer, and dated obligations, plus the derived sufficiency floor and timing deadline. Call when asked about cash on hand, obligations, payroll, buffer, or why the floor is what it is.",
+    inputSchema: opportunityArg,
+    execute: async (args) => {
+      const id = await resolveOpportunityId(args?.opportunityId);
+      if (!id) return { summary: "There is no live auction to report on right now." };
+      const opp = await prisma.financingOpportunity.findUnique({
+        where: { id },
+        include: { cashPosition: { include: { obligations: { orderBy: { dueDate: "asc" } } } } },
+      });
+      if (!opp || !opp.cashPosition)
+        return { summary: "No cash position is recorded for this opportunity." };
+      const cp = opp.cashPosition;
+      const result = await clearById(id);
+      const u = result?.utility;
+      const obligations = cp.obligations.map((o) => ({
+        label: o.label,
+        amountPaise: o.amountPaise,
+        dueDate: o.dueDate.toISOString().slice(0, 10),
+      }));
+      const summary =
+        `Cash on hand is ${rupees(cp.currentCashPaise)} rupees against a buffer of ` +
+        `${rupees(cp.cashThresholdPaise)} rupees. ` +
+        (obligations.length
+          ? `Obligations: ${obligations
+              .map((o) => `${o.label} ${rupees(o.amountPaise)} due ${o.dueDate}`)
+              .join("; ")}. `
+          : "") +
+        (u && !u.unconstrained
+          ? `Derived need: ${rupees(u.sufficiencyFloorPaise)} rupees by ${u.timingDeadline}` +
+            (u.drivingObligation ? `, driven by ${u.drivingObligation}` : "") +
+            "."
+          : "No projected shortfall.");
+      return {
+        summary,
+        currentCashPaise: cp.currentCashPaise,
+        cashThresholdPaise: cp.cashThresholdPaise,
+        obligations,
+        utility: u,
+      };
+    },
+  }),
+
+  getInvoiceDetail: tool({
+    description:
+      "Return the invoice behind an auction: number, face value, customer, due date, verification tier, and three-way-match status. Call when asked about the invoice, customer, face value, or verification of a specific deal.",
+    inputSchema: opportunityArg,
+    execute: async (args) => {
+      const id = await resolveOpportunityId(args?.opportunityId);
+      if (!id) return { summary: "There is no live auction to report on right now." };
+      const opp = await prisma.financingOpportunity.findUnique({
+        where: { id },
+        include: { invoice: { include: { customer: true } } },
+      });
+      if (!opp) return { summary: "I could not load that opportunity." };
+      const inv = opp.invoice;
+      const summary =
+        `Invoice ${inv.invoiceNumber} from ${inv.customer.name}, face value ` +
+        `${rupees(Number(inv.faceValue.toString()) * 100)} rupees, due ` +
+        `${inv.dueDate.toISOString().slice(0, 10)}. Verification tier: ${inv.verificationTier}` +
+        (inv.threeWayMatched ? " (three-way matched)." : ".");
+      return {
+        summary,
+        invoiceNumber: inv.invoiceNumber,
+        customer: inv.customer.name,
+        faceValuePaise: Number(inv.faceValue.toString()) * 100,
+        verificationTier: inv.verificationTier,
+        dueDate: inv.dueDate.toISOString().slice(0, 10),
+      };
+    },
+  }),
+
+  getProviderLiquidity: tool({
+    description:
+      "Return per-provider liquidity and capacity: total and available capital, ticket range, settlement speed, concentration cap, and reliability score. Call when asked about a specific provider's capacity, liquidity, or reliability.",
+    inputSchema: z.object({}).optional(),
+    execute: async () => {
+      const providers = await prisma.capitalProvider.findMany({
+        select: {
+          name: true,
+          archetype: true,
+          totalLiquidity: true,
+          availableLiquidity: true,
+          minTicket: true,
+          maxTicket: true,
+          settlementDays: true,
+          concentrationLimitPct: true,
+          reliabilityScore: true,
+        },
+      });
+      if (providers.length === 0)
+        return { summary: "There are no capital providers on file." };
+      const rows = providers.map((p) => ({
+        name: p.name,
+        archetype: p.archetype,
+        totalPaise: Math.round(Number(p.totalLiquidity.toString()) * 100),
+        freePaise: Math.round(Number(p.availableLiquidity.toString()) * 100),
+        minTicketPaise: Math.round(Number(p.minTicket.toString()) * 100),
+        maxTicketPaise: Math.round(Number(p.maxTicket.toString()) * 100),
+        settlementDays: p.settlementDays,
+        concentrationCapPct: Number(p.concentrationLimitPct.toString()),
+        reliability: Number(p.reliabilityScore.toString()),
+      }));
+      const summary =
+        "Per provider: " +
+        rows
+          .map(
+            (r) =>
+              `${r.name} (${r.archetype}) has ${rupees(r.freePaise)} rupees free of ` +
+              `${rupees(r.totalPaise)} rupees, settles T+${r.settlementDays}, reliability ${r.reliability.toFixed(2)}`,
+          )
+          .join("; ") +
+        ".";
+      return { summary, providers: rows };
+    },
+  }),
+
+  getActionQueue: tool({
+    description:
+      "List invoices pending a financing decision (the action queue). Call when asked about the pending queue, what needs approval, or upcoming decisions.",
+    inputSchema: z.object({}).optional(),
+    execute: async () => {
+      const invoices = await prisma.invoice.findMany({
+        include: { customer: true },
+        orderBy: { dueDate: "asc" },
+      });
+      if (invoices.length === 0) return { summary: "The action queue is empty." };
+      const queue = invoices.map((inv) => ({
+        id: `AQ-${inv.id}`,
+        invoiceId: inv.id,
+        customerName: inv.customer.name,
+        amountPaise: Math.round(Number(inv.faceValue.toString()) * 100),
+        dueDate: inv.dueDate.toISOString().slice(0, 10),
+        daysOverdue: Math.max(0, Math.floor((Date.now() - inv.dueDate.getTime()) / 86_400_000)),
+        approvalState: "PENDING_APPROVAL",
+        recommendedAction: "FINANCE",
+      }));
+      const summary =
+        `There are ${queue.length} invoices in the action queue. ` +
+        queue
+          .map((q) => `${q.customerName} ${rupees(q.amountPaise)} rupees due ${q.dueDate}`)
+          .join("; ") +
+        ".";
+      return { summary, queue };
+    },
+  }),
+
+  getVerificationStatus: tool({
+    description:
+      "Return verification tiers across the book and the tier for a specific auction's invoice. Call when asked about verification, KYB, or how trusted an invoice is.",
+    inputSchema: opportunityArg,
+    execute: async (args) => {
+      const distribution = await prisma.invoice.groupBy({
+        by: ["verificationTier"],
+        _count: true,
+      });
+      const dist = distribution.map((d) => `${d.verificationTier}: ${d._count}`).join(", ");
+      let summary = `Verification tiers across the book: ${dist}.`;
+      if (args?.opportunityId) {
+        const opp = await prisma.financingOpportunity.findUnique({
+          where: { id: args.opportunityId },
+          include: { invoice: true },
+        });
+        if (opp) summary += ` This auction's invoice is ${opp.invoice.verificationTier}.`;
+      }
+      return {
+        summary,
+        distribution: distribution.map((d) => ({ tier: d.verificationTier, count: d._count })),
+      };
+    },
+  }),
+
   executeDecision: tool({
     description:
       "EXECUTE a write action: approve or reject an invoice for financing. This changes state and must only be called when the user has explicitly requested the action AND passed confirmed: true. Never call it speculatively.",

@@ -671,3 +671,19 @@ model EscrowLock {
   @@index([status])
   @@index([expiresAt])
 }
+
+/// Durable agent memory for the CFO Voice Cockpit (#29).
+///
+/// Replaces the in-process Map so conversation context survives across serverless
+/// instances and is queryable like any other table on the Supabase Postgres
+/// database. One row per message; read back in `seq` order for a session.
+model AgentMemory {
+  id        String   @id @default(cuid())
+  sessionId String
+  seq       Int      @default(autoincrement())
+  role      String // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+}

@@ -1,40 +1,56 @@
-// Short-term memory for the agent.
+// Durable agent memory, backed by the Supabase Postgres database (#29).
 //
-// A server-side map keyed by sessionId. The CFO cockpit is ephemeral and does
-// not (yet) persist sessions, so this gives the agent continuity across turns
-// within a session instead of treating every question as independent. The store
-// keeps a rolling window so a long conversation cannot grow the prompt without
-// bound.
+// Replaces the previous in-process Map so a conversation's context survives
+// across serverless instance restarts and is queryable like any other table.
+// One row per message; read back in creation order for a session. The Prisma
+// client targets the Supabase Postgres connection (DATABASE_URL), so this is the
+// agent's persistent store on Supabase.
 
+import { prisma } from "@/lib/db";
 import type { MemoryEntry } from "./types";
 
-const WINDOW = 12; // keep at most this many recent turns
-
-const store = new Map<string, MemoryEntry[]>();
+const WINDOW = 12; // only the most recent turns are returned to the model
 
 function key(sessionId?: string): string {
   return sessionId && sessionId.length > 0 ? sessionId : "default";
 }
 
-/** Load the recent turns for a session (oldest first). */
-export function loadMemory(sessionId?: string): MemoryEntry[] {
-  return store.get(key(sessionId)) ?? [];
+/** Load the recent turns for a session, oldest first. */
+export async function loadMemory(sessionId?: string): Promise<MemoryEntry[]> {
+  const rows = await prisma.agentMemory.findMany({
+    where: { sessionId: key(sessionId) },
+    orderBy: { seq: "asc" },
+    take: WINDOW,
+  });
+  // Return the trailing window so very long sessions do not blow up the prompt.
+  const sliced = rows.slice(-WINDOW);
+  return sliced.map((r) => ({ role: r.role as MemoryEntry["role"], content: r.content }));
 }
 
-/** Append a user/assistant turn and trim to the rolling window. */
-export function appendTurn(
+/** Append a turn and keep the stored history bounded. */
+export async function appendTurn(
   sessionId: string | undefined,
   role: MemoryEntry["role"],
   content: string,
-): void {
+): Promise<void> {
   const k = key(sessionId);
-  const turns = store.get(k) ?? [];
-  turns.push({ role, content });
-  while (turns.length > WINDOW) turns.shift();
-  store.set(k, turns);
+  await prisma.agentMemory.create({ data: { sessionId: k, role, content } });
+  // Bound storage: delete the oldest rows beyond the window for this session.
+  const count = await prisma.agentMemory.count({ where: { sessionId: k } });
+  if (count > WINDOW) {
+    const excess = await prisma.agentMemory.findMany({
+      where: { sessionId: k },
+      orderBy: { seq: "asc" },
+      take: count - WINDOW,
+      select: { id: true },
+    });
+    await prisma.agentMemory.deleteMany({
+      where: { id: { in: excess.map((e) => e.id) } },
+    });
+  }
 }
 
-/** Reset a session's memory (used by an explicit "clear" intent). */
-export function clearMemory(sessionId?: string): void {
-  store.delete(key(sessionId));
+/** Reset a session's memory. */
+export async function clearMemory(sessionId?: string): Promise<void> {
+  await prisma.agentMemory.deleteMany({ where: { sessionId: key(sessionId) } });
 }

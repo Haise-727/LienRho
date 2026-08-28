@@ -74,7 +74,7 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   };
 
   const system = buildSystemPrompt();
-  const prior = loadMemory(input.sessionId);
+  const prior = await loadMemory(input.sessionId);
   const messages: ModelMessage[] = [
     ...memoryToMessages(prior),
     { role: "user", content: input.question } as ModelMessage,
@@ -99,8 +99,8 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
     ok: true,
   }));
 
-  appendTurn(input.sessionId, "user", input.question);
-  appendTurn(input.sessionId, "assistant", answer);
+  await appendTurn(input.sessionId, "user", input.question);
+  await appendTurn(input.sessionId, "assistant", answer);
 
   return { answer, intent: "agent", toolCalls };
 }
