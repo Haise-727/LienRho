@@ -43,12 +43,27 @@ Either is a one-route swap. Awaiting user choice (gates Step 7).
 Every agent returns a trace: list[str]; supervisor persists a ClearingRun to the existing
 durable store. simulated flag recorded so reviewers can tell mock from real (repo #6).
 
-## D9 - Wire types
-Wire schemas use float for monetary amounts (matches api/schemas.py InvoiceOut) and date
-for dates. Keeps JSON clean and tests simple.
+## D9 - Wire types (superseded by D10 / issue #9)
+Wire schemas use integer PAISE for monetary amounts and date for dates.
+- Earlier draft used float; changed via issue #9 because IEEE-754 drift across
+  advance->discount->net->effective-cost is the same order as the 3-bps demo gap, so float
+  money can silently flip the demo winner. Track 2 enforces integer paise at its boundary.
 
 ## Structure (added)
 NexusX agent code is a standalone package at `ai/nexus/` (importable as `ai.nexus`),
 kept separate from `backend/app/` for separation of concerns. The backend imports it
 across the package boundary; its dependencies are declared in `ai/requirements.txt`.
+
+
+## D10 - Track 2 contract alignment (issue #9, blocking)
+Track 3's LenderBid/Offer mapping was mismatched with Track 2's `Offer`. Resolved:
+- Lender fee = ABSOLUTE paise amount (`fees_paise: int`), NOT a bps rate. A rate would break
+  the flat-fee regressive effect that docs/01's worked example depends on.
+- Money across the seam = integer paise (invoice_amount_paise, cash_need_paise, fees_paise).
+- LenderBid gains `recourse: bool` + `expires_at` (needed for Track 2 scoring).
+- ClearingResult.lender_bids is plural (marketplace needs many competing bids to rank).
+- MatchResult pass-through (Track 2's discriminated union) deferred to Step 3 MatchingClient
+  seam; until then it is an internal placeholder.
+- Unit conversions (advanceRate 0..1 -> bps, apr -> bps, hours -> days) owned by Track 2
+  adapter (owner's offer); Track 3 keeps float rates / hours.
 

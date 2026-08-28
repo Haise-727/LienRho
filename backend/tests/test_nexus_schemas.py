@@ -1,168 +1,156 @@
-﻿"""Contract validation for Track 3 NexusX schemas (no LLM / no other track needed)."""
-
-from datetime import date
-
-import pytest
+﻿import pytest
+from datetime import date, datetime
+from pydantic import ValidationError
 
 from ai.nexus.schemas import (
-    ClearingRequest,
-    ClearingResult,
-    DealExplainerRequest,
-    DealExplainerResponse,
-    LenderBid,
-    LenderBidRequest,
-    MatchResult,
-    SignedUrlResponse,
     SupplierInput,
     UrgencyLevel,
     UrgencyVerdict,
+    LenderBid,
+    MatchResult,
+    ClearingRequest,
+    ClearingResult,
+    SignedUrlResponse,
+    DealExplainerRequest,
+    DealExplainerResponse,
+    AgentCard,
 )
-
-
-def _verdict() -> UrgencyVerdict:
-    return UrgencyVerdict(
-        urgency_level=UrgencyLevel.HIGH,
-        rationale="Due soon, high cash need.",
-        confidence=0.8,
-        factors=["due in 9d"],
-    )
 
 
 def test_supplier_input_camel_alias_and_roundtrip():
     raw = {
         "supplierId": "SUP-1",
         "invoiceId": "INV-1",
-        "invoiceAmount": 120000.0,
+        "invoiceAmountPaise": 1200000000,
         "dueDate": "2026-09-30",
         "creditDays": 45,
-        "cashNeed": 90000.0,
+        "cashNeedPaise": 900000000,
+        "currency": "INR",
+        "notes": "urgent",
     }
     obj = SupplierInput.model_validate(raw)
-    assert obj.invoice_amount == 120000.0
+    assert obj.invoice_amount_paise == 1200000000
     out = obj.model_dump(by_alias=True, mode="json")
-    assert out["invoiceAmount"] == 120000.0
+    assert out["invoiceAmountPaise"] == 1200000000
     assert out["dueDate"] == "2026-09-30"
-    # snake_case also accepted (populate_by_name)
-    alt = SupplierInput.model_validate(
-        {
-            "supplier_id": "SUP-1",
-            "invoice_id": "INV-1",
-            "invoice_amount": 1.0,
-            "due_date": "2026-09-30",
-            "credit_days": 1,
-            "cash_need": 0.5,
-        }
+    # snake also accepted (populate_by_name)
+    alt = SupplierInput.model_validate({
+        "supplier_id": "SUP-1",
+        "invoice_id": "INV-1",
+        "invoice_amount_paise": 100,
+        "due_date": "2026-09-30",
+        "credit_days": 10,
+        "cash_need_paise": 50,
+    })
+    assert alt.invoice_amount_paise == 100
+
+
+def test_bid_rate_bounds_reject():
+    base = dict(
+        providerId="P",
+        providerName="Mock",
+        advanceRate=0.8,
+        apr=0.12,
+        feesPaise=250000,
+        disbursalLatencyHours=24,
+        tenorDays=30,
+        recourse=True,
+        confidence=0.9,
     )
-    assert alt.supplier_id == "SUP-1"
+    with pytest.raises(ValidationError):
+        LenderBid.model_validate({**base, "advanceRate": 2.0})
+    with pytest.raises(ValidationError):
+        LenderBid.model_validate({**base, "apr": -0.1})
+    # fee must be an integer paise amount, never a float/rate
+    with pytest.raises(ValidationError):
+        LenderBid.model_validate({**base, "feesPaise": 2500.5})
+    with pytest.raises(ValidationError):
+        LenderBid.model_validate({**base, "feesPaise": -1})
 
 
-def test_supplier_input_rejects_nonpositive_amount():
-    with pytest.raises(Exception):
-        SupplierInput(
-            supplier_id="S",
-            invoice_id="I",
-            invoice_amount=0,
-            due_date=date(2026, 1, 1),
-            credit_days=1,
-            cash_need=1,
-        )
+def test_lender_bid_fee_is_absolute_amount():
+    bid = LenderBid.model_validate(dict(
+        providerId="P", providerName="Mock", advanceRate=0.8, apr=0.12,
+        feesPaise=250000, disbursalLatencyHours=24, tenorDays=30,
+        recourse=False, confidence=0.9,
+    ))
+    assert bid.model_dump(by_alias=True)["feesPaise"] == 250000
 
 
-def test_urgency_enum_constrained():
-    with pytest.raises(Exception):
-        UrgencyVerdict(urgency_level="NOPE", rationale="x", confidence=0.5)
-    with pytest.raises(Exception):
-        UrgencyVerdict(urgency_level=UrgencyLevel.LOW, rationale="x", confidence=1.5)
-
-
-def test_lender_bid_rates_bounded():
-    with pytest.raises(Exception):
-        LenderBid(
-            provider_id="P",
-            provider_name="Mock",
-            advance_rate=2.0,
-            apr=0.1,
-            fees_bps=10,
-            disbursal_latency_hours=1,
-            tenor_days=5,
-            confidence=0.9,
-            simulated=True,
-        )
+def test_recourse_and_expiry_present():
+    bid = LenderBid.model_validate(dict(
+        providerId="P", providerName="Mock", advanceRate=0.8, apr=0.12,
+        feesPaise=250000, disbursalLatencyHours=24, tenorDays=30,
+        recourse=True, expiresAt="2026-10-01T12:00:00", confidence=0.9,
+    ))
+    assert bid.recourse is True
+    assert bid.expires_at == datetime(2026, 10, 1, 12, 0, 0)
+    out = bid.model_dump(by_alias=True, mode="json")
+    assert out["expiresAt"] == "2026-10-01T12:00:00"
+    assert out["recourse"] is True
 
 
 def test_match_result_and_clearing_result_compose():
-    bid = LenderBid(
-        provider_id="P",
-        provider_name="Mock",
-        advance_rate=0.75,
-        apr=0.14,
-        fees_bps=120,
-        disbursal_latency_hours=24,
-        tenor_days=30,
-        confidence=0.9,
-        simulated=True,
-    )
-    match = MatchResult(
-        match_id="M1", matched=True, matched_bid_ref="P", score=0.91, simulated=True
-    )
+    bid = LenderBid.model_validate(dict(
+        providerId="P", providerName="Mock", advanceRate=0.8, apr=0.12,
+        feesPaise=250000, disbursalLatencyHours=24, tenorDays=30,
+        recourse=True, confidence=0.9,
+    ))
+    verdict = UrgencyVerdict(level=UrgencyLevel.HIGH, factor=0.9, rationale="cash gap")
+    match = MatchResult.model_validate({
+        "matchId": "M1", "matched": True, "matchedBidRef": "P",
+        "score": 0.91, "notes": "ok", "simulated": True,
+    })
     result = ClearingResult(
         opportunity_id="O1",
-        supplier_verdict=_verdict(),
-        lender_bid=bid,
+        supplier_verdict=verdict,
+        lender_bids=[bid],
         match=match,
         clearing_summary="ok",
         simulated=True,
     )
     dumped = result.model_dump(by_alias=True)
-    assert dumped["opportunityId"] == "O1"
-    assert dumped["lenderBid"]["advanceRate"] == 0.75
+    assert dumped["lenderBids"][0]["advanceRate"] == 0.8
     assert dumped["match"]["matched"] is True
+    assert isinstance(dumped["lenderBids"], list)
 
 
-def test_lender_bid_request_nests_verdict():
-    req = LenderBidRequest(
-        opportunity_id="O1", verdict=_verdict(), advance_amount=90000, tenor_days=30
-    )
-    assert req.verdict.urgency_level == UrgencyLevel.HIGH
+def test_clearing_request_accepts_bid_list():
+    req = ClearingRequest.model_validate({
+        "opportunityId": "O1",
+        "supplier": {
+            "supplierId": "SUP-1", "invoiceId": "INV-1",
+            "invoiceAmountPaise": 1200000000, "dueDate": "2026-09-30",
+            "creditDays": 45, "cashNeedPaise": 900000000,
+        },
+        "bids": [{
+            "providerId": "P", "providerName": "Mock", "advanceRate": 0.8,
+            "apr": 0.12, "feesPaise": 250000, "disbursalLatencyHours": 24,
+            "tenorDays": 30, "recourse": True, "confidence": 0.9,
+        }],
+    })
+    assert len(req.bids) == 1
+    assert req.supplier.invoice_amount_paise == 1200000000
 
 
-def test_clearing_request_nests_supplier():
-    si = SupplierInput(
-        supplier_id="S",
-        invoice_id="I",
-        invoice_amount=1000,
-        due_date=date(2026, 1, 1),
-        credit_days=30,
-        cash_need=500,
-    )
-    cr = ClearingRequest(opportunity_id="O1", supplier_input=si)
-    assert cr.supplier_input.invoice_amount == 1000
+def test_voice_signed_url_shape():
+    r = SignedUrlResponse(url="https://x/y", provider="elevenlabs")
+    d = r.model_dump(by_alias=True)
+    assert d == {"url": "https://x/y", "expiresAt": None, "provider": "elevenlabs"}
 
 
-def test_voice_shapes():
-    sur = SignedUrlResponse(simulated=True)
-    assert sur.model_dump(by_alias=True) == {
-        "signedUrl": None,
-        "agentId": None,
-        "expiresAt": None,
-        "simulated": True,
-    }
-    der = DealExplainerRequest(
-        deal_id="O1",
-        clearing_request=ClearingRequest(
-            opportunity_id="O1",
-            supplier_input=SupplierInput(
-                supplier_id="S",
-                invoice_id="I",
-                invoice_amount=1000,
-                due_date=date(2026, 1, 1),
-                credit_days=30,
-                cash_need=500,
-            ),
-        ),
-    )
-    assert der.deal_id == "O1"
-    resp = DealExplainerResponse(script="hi", simulated=True)
-    assert resp.model_dump(by_alias=True)["simulated"] is True
+def test_deal_explainer_shape():
+    req = DealExplainerRequest.model_validate({"supplierId": "SUP-1", "opportunityId": "O1"})
+    assert req.supplier_id == "SUP-1"
+    resp = DealExplainerResponse(opportunity_id="O1", narrative="n")
+    d = resp.model_dump(by_alias=True)
+    assert d["narrative"] == "n"
+    assert "generatedAt" in d
 
 
+def test_agent_card_shape():
+    card = AgentCard(id="supplier-agent", name="Supplier Agent", role="supplier",
+                     model="gpt-4o", tools=["x"])
+    d = card.model_dump(by_alias=True)
+    assert d["id"] == "supplier-agent"
+    assert d["tools"] == ["x"]

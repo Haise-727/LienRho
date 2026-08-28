@@ -1,211 +1,143 @@
-﻿"""Typed I/O contracts for the Track 3 NexusX agents (issue #3).
+﻿"""Pydantic v2 contracts for the NexusX agent layer (Track 3).
 
-Single source of truth for every agent's input and output. FastAPI serialises
-these into openapi.json, which regenerates frontend/src/lib/api-types.ts - so the
-frontend stays in lockstep with zero hand-maintenance, and a future TS/Option-A
-rewrite maps 1:1 to Zod.
-
-Convention (matches api/schemas.py): camelCase on the wire via serialization_alias,
-populate_by_name=True so snake_case is also accepted, float for money, date for dates.
-Every agent output is a validated object - free text from an LLM is never passed
-through (repo non-negotiable #1: no model computes a financial figure).
+Contract note (issue #9, blocking): these are the single source of truth for
+Track 3 I/O.
+- Money crosses the seam as INTEGER PAISE (never float): IEEE-754 drift across
+  advance -> discount -> net -> effective-cost can flip the 3-bps demo winner.
+- Lender fee is an ABSOLUTE flat amount in paise (feesPaise), NOT a rate
+  (feesBps). A proportional fee would erase the regressive-fee effect that the
+  docs/01 worked example depends on.
+- Rates (advanceRate, apr) stay float 0..1; Track 2 adapts them to bps.
+- recourse + expiresAt are required for Track 2 scoring.
+- MatchResult is an internal placeholder; Step 3 (MatchingClient seam) replaces
+  it with a pass-through of Track 2's discriminated-union MatchResult (issue #9 #4).
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from enum import Enum
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class UrgencyLevel(str, Enum):
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    CRITICAL = "CRITICAL"
-
-
-# --------------------------------------------------------------------------- #
-# SupplierAgent
-# --------------------------------------------------------------------------- #
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    NONE = "none"
 
 
 class SupplierInput(BaseModel):
-    """A supplier working-capital request for the urgency interpreter."""
-
+    """Supplier side of a clearing opportunity. Money is integer paise."""
     model_config = ConfigDict(populate_by_name=True)
 
     supplier_id: str = Field(alias="supplierId")
     invoice_id: str = Field(alias="invoiceId")
-    invoice_amount: float = Field(alias="invoiceAmount", gt=0)
+    invoice_amount_paise: int = Field(alias="invoiceAmountPaise", gt=0)
     due_date: date = Field(alias="dueDate")
-    credit_days: int = Field(alias="creditDays", ge=0)
-    cash_need: float = Field(alias="cashNeed", ge=0)
+    credit_days: int = Field(alias="creditDays", gt=0)
+    cash_need_paise: int = Field(alias="cashNeedPaise", gt=0)
     currency: str = Field(default="INR", alias="currency")
     notes: str = Field(default="", alias="notes")
 
 
 class UrgencyVerdict(BaseModel):
-    """SupplierAgent output: how urgent is this request."""
-
     model_config = ConfigDict(populate_by_name=True)
 
-    urgency_level: UrgencyLevel = Field(alias="urgencyLevel")
-    rationale: str = Field(alias="rationale")
-    confidence: float = Field(ge=0.0, le=1.0, alias="confidence")
-    factors: list[str] = Field(default_factory=list, alias="factors")
-    fallback_reason: str | None = Field(
-        default=None, alias="fallbackReason"
-    )
-    trace: list[str] = Field(default_factory=list, alias="trace")
-
-
-# --------------------------------------------------------------------------- #
-# LenderBiddingAgent
-# --------------------------------------------------------------------------- #
-
-
-class LenderBidRequest(BaseModel):
-    """Input to the lender bidding agent: the opportunity + supplier verdict."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    opportunity_id: str = Field(alias="opportunityId")
-    verdict: UrgencyVerdict
-    advance_amount: float = Field(alias="advanceAmount", gt=0)
-    tenor_days: int = Field(alias="tenorDays", ge=1)
-    risk_tier: str = Field(default="B", alias="riskTier")
+    level: UrgencyLevel
+    factor: float = Field(ge=0, le=1)
+    rationale: str
+    simulated: bool = False
+    confidence: float = Field(default=1.0, ge=0, le=1)
 
 
 class LenderBid(BaseModel):
-    """LenderBiddingAgent output: a (mock) capital-provider bid.
+    """One lender's offer.
 
-    The numbers come from a deterministic generator, never an LLM.
+    Fee is an ABSOLUTE paise amount (issue #9 #1). Rates are float 0..1; Track 2
+    adapts to bps. recourse/expiresAt are needed for Track 2 scoring (issue #9 #3).
     """
-
     model_config = ConfigDict(populate_by_name=True)
 
     provider_id: str = Field(alias="providerId")
     provider_name: str = Field(alias="providerName")
-    advance_rate: float = Field(ge=0.0, le=1.0, alias="advanceRate")
-    apr: float = Field(ge=0.0, le=1.0, alias="apr")
-    fees_bps: float = Field(ge=0.0, alias="feesBps")
-    disbursal_latency_hours: int = Field(
-        alias="disbursalLatencyHours", ge=0
-    )
-    tenor_days: int = Field(alias="tenorDays", ge=1)
-    confidence: float = Field(ge=0.0, le=1.0, alias="confidence")
-    simulated: bool = Field(alias="simulated")
-    fallback_reason: str | None = Field(
-        default=None, alias="fallbackReason"
-    )
-    trace: list[str] = Field(default_factory=list, alias="trace")
-
-
-# --------------------------------------------------------------------------- #
-# MatchingClient (Track 2 seam)
-# --------------------------------------------------------------------------- #
+    advance_rate: float = Field(alias="advanceRate", gt=0, le=1)
+    apr: float = Field(alias="apr", gt=0, le=1)
+    fees_paise: int = Field(alias="feesPaise", ge=0)
+    disbursal_latency_hours: int = Field(alias="disbursalLatencyHours", ge=0)
+    tenor_days: int = Field(alias="tenorDays", gt=0)
+    recourse: bool = Field(alias="recourse")
+    expires_at: Optional[datetime] = Field(default=None, alias="expiresAt")
+    confidence: float = Field(alias="confidence", ge=0, le=1)
+    simulated: bool = Field(default=False, alias="simulated")
 
 
 class MatchResult(BaseModel):
-    """Outcome of a market-clearing match, produced by MatchingClient (Track 2)."""
-
+    """Internal placeholder. Step 3 replaces with Track 2's MatchResult
+    pass-through (issue #9 #4)."""
     model_config = ConfigDict(populate_by_name=True)
 
     match_id: str = Field(alias="matchId")
     matched: bool = Field(alias="matched")
-    matched_bid_ref: str | None = Field(
-        default=None, alias="matchedBidRef"
-    )
-    score: float = Field(ge=0.0, le=1.0, alias="score")
+    matched_bid_ref: Optional[str] = Field(default=None, alias="matchedBidRef")
+    score: float = Field(alias="score", ge=0, le=1)
     notes: str = Field(default="", alias="notes")
-    simulated: bool = Field(alias="simulated")
-
-
-# --------------------------------------------------------------------------- #
-# MarketClearingAgent (supervisor)
-# --------------------------------------------------------------------------- #
+    simulated: bool = Field(default=False, alias="simulated")
 
 
 class ClearingRequest(BaseModel):
-    """Supervisor entry point: clear one financing opportunity."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     opportunity_id: str = Field(alias="opportunityId")
-    supplier_input: SupplierInput = Field(alias="supplierInput")
-    market_context: dict = Field(
-        default_factory=dict, alias="marketContext"
-    )
+    supplier: SupplierInput = Field(alias="supplier")
+    bids: List[LenderBid] = Field(alias="bids")
 
 
 class ClearingResult(BaseModel):
-    """MarketClearingAgent output: the aggregated clearing decision."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     opportunity_id: str = Field(alias="opportunityId")
     supplier_verdict: UrgencyVerdict = Field(alias="supplierVerdict")
-    lender_bid: LenderBid = Field(alias="lenderBid")
-    match: MatchResult
+    lender_bids: List[LenderBid] = Field(alias="lenderBids")  # plural (issue #9 #5)
+    match: MatchResult = Field(alias="match")
     clearing_summary: str = Field(alias="clearingSummary")
-    agent_trace: list[str] = Field(
-        default_factory=list, alias="agentTrace"
-    )
-    simulated: bool = Field(alias="simulated")
-
-
-# --------------------------------------------------------------------------- #
-# Voice / ElevenLabs (Next.js owns the secret; these are the JSON shapes)
-# --------------------------------------------------------------------------- #
+    simulated: bool = Field(default=False, alias="simulated")
 
 
 class SignedUrlResponse(BaseModel):
-    """Response from GET /api/voice/signed-url."""
-
     model_config = ConfigDict(populate_by_name=True)
 
-    signed_url: str | None = Field(default=None, alias="signedUrl")
-    agent_id: str | None = Field(default=None, alias="agentId")
-    expires_at: str | None = Field(default=None, alias="expiresAt")
-    simulated: bool = Field(alias="simulated")
+    url: str = Field(alias="url")
+    expires_at: Optional[datetime] = Field(default=None, alias="expiresAt")
+    provider: str = Field(default="elevenlabs", alias="provider")
 
 
 class DealExplainerRequest(BaseModel):
-    """POST /api/voice/deal-explainer body (passed through to /api/nexus/clear)."""
-
     model_config = ConfigDict(populate_by_name=True)
 
-    deal_id: str = Field(alias="dealId")
-    clearing_request: ClearingRequest = Field(alias="clearingRequest")
+    supplier_id: str = Field(alias="supplierId")
+    opportunity_id: str = Field(alias="opportunityId")
+    audience: str = Field(default="borrower", alias="audience")
 
 
 class DealExplainerResponse(BaseModel):
-    """POST /api/voice/deal-explainer response."""
-
     model_config = ConfigDict(populate_by_name=True)
 
-    script: str
-    audio_url: str | None = Field(default=None, alias="audioUrl")
-    simulated: bool = Field(alias="simulated")
-
-
-# --------------------------------------------------------------------------- #
-# Agent card (A2A / MCP seam - GET /api/nexus/agents)
-# --------------------------------------------------------------------------- #
+    opportunity_id: str = Field(alias="opportunityId")
+    narrative: str = Field(alias="narrative")
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), alias="generatedAt")
+    simulated: bool = Field(default=False, alias="simulated")
 
 
 class AgentCard(BaseModel):
-    """A discoverable capability description for a future A2A/MCP wrapper."""
-
     model_config = ConfigDict(populate_by_name=True)
 
-    agent_id: str = Field(alias="agentId")
-    role: str
-    input_schema: str = Field(alias="inputSchema")
-    output_schema: str = Field(alias="outputSchema")
-    endpoint: str
-    is_supervisor: bool = Field(alias="isSupervisor")
-    workers: list[str] = Field(default_factory=list, alias="workers")
+    id: str = Field(alias="id")
+    name: str = Field(alias="name")
+    role: str = Field(alias="role")
+    model: str = Field(alias="model")
+    tools: List[str] = Field(default_factory=list, alias="tools")
+    description: str = Field(default="", alias="description")
 
