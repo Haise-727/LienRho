@@ -36,6 +36,7 @@ Written to be read in order. Each one answers a specific question.
 | [`07-file-ownership.md`](07-file-ownership.md) | Who works where — the map that keeps four people out of each other's diffs |
 | [`08-aws-migration-plan.md`](08-aws-migration-plan.md) | Sprint 2: Supabase → Aurora, ECS Fargate, ElastiCache |
 | [`09-database.md`](09-database.md) | **The data model in full** — every table, the money conventions, the ledger mechanics, invariants, and query recipes |
+| [`12-supabase-to-aws.md`](12-supabase-to-aws.md) | **Migrating off Supabase** — what Aurora replaces and what it doesn't, the auth decision, and the blocker that isn't infrastructure |
 | [`future_sprint_plan_v2.md`](future_sprint_plan_v2.md) | **Future Sprint Plan (v2)** — Gap analysis, auth, multi-agent architecture, frontend redesign, and AWS CI/CD timeline |
 
 ---
