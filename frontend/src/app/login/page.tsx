@@ -1,186 +1,128 @@
 "use client";
 
+// Sign-in (#25).
+//
+// One button. The persona switcher that used to live here faked a session by
+// string-matching an email and setting a base64 cookie — no verification of
+// any kind. It is gone; so is /api/auth/login.
+//
+// Keeps Track 4's Apple-style card so the visual language is unchanged.
+
 import React, { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, ShieldCheck, Lock, Building2, Store, Landmark, Zap } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
+import { createClient } from "@/lib/supabase/client";
 
-function LoginForm() {
-  const router = useRouter();
+/** Messages are deliberately vague about *why* — see below. */
+const ERRORS: Record<string, string> = {
+  unauthorized: "Please sign in to continue.",
+  not_authorized:
+    "That Google account isn't registered to an organisation on LienRho. Ask your administrator to add it.",
+  oauth_failed: "Google sign-in was cancelled or failed. Please try again.",
+  missing_code: "Sign-in didn't complete. Please try again.",
+  exchange_failed: "Sign-in didn't complete. Please try again.",
+  config: "Sign-in isn't configured on this deployment yet.",
+};
+
+function GoogleMark() {
+  return (
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 18 18" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.874 2.6836-6.615z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.4673-.806 5.9564-2.1805l-2.9087-2.2581c-.8059.54-1.8368.859-3.0477.859-2.344 0-4.3282-1.5831-5.036-3.7104H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.964 10.71c-.18-.54-.2822-1.1168-.2822-1.71s.1023-1.17.2823-1.71V4.9582H.9573A8.9965 8.9965 0 0 0 0 9c0 1.4523.3477 2.8268.9573 4.0418L3.964 10.71z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.426 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1627 6.656 3.5795 9 3.5795z"
+      />
+    </svg>
+  );
+}
+
+function LoginCard() {
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("ops@vertexcomponents.example");
-  const [password, setPassword] = useState("password123");
   const [submitting, setSubmitting] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
 
-  async function handleLogin(overrideEmail?: string) {
+  const paramError = searchParams.get("error");
+  const message = failure ?? (paramError ? (ERRORS[paramError] ?? ERRORS.oauth_failed) : null);
+
+  async function signIn() {
     setSubmitting(true);
-    const targetEmail = overrideEmail || email;
-
+    setFailure(null);
     try {
-      await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: targetEmail, password }),
+      const supabase = createClient();
+      const next = searchParams.get("next") ?? "/";
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        },
       });
-
-      router.replace(searchParams.get("next") ?? "/");
-      router.refresh();
+      if (error) {
+        setFailure(ERRORS.oauth_failed);
+        setSubmitting(false);
+      }
+      // On success the browser is navigating to Google — leave the button
+      // disabled rather than resetting it, so a second click cannot fire
+      // mid-redirect.
     } catch {
+      setFailure(ERRORS.config);
       setSubmitting(false);
     }
   }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className="w-full max-w-md rounded-3xl border border-black/5 bg-white p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)]"
     >
-      {/* Brand Header */}
-      <div className="mb-6 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-white shadow-sm font-black text-lg mb-3">
-          LR
+      <div className="mb-8 text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-lg font-black text-white shadow-sm">
+          L
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-neutral-900">
-          LienRho Marketplace
-        </h1>
-        <p className="mt-1 text-xs text-neutral-500 font-medium">
-          CSI ORIGIN 2026 • Supply-Chain Working Capital Platform
+        <h1 className="text-xl font-bold tracking-tight text-neutral-900">LienRho</h1>
+        <p className="mt-1 text-xs font-medium text-neutral-500">
+          Agentic capital marketplace for supply-chain working capital
         </p>
       </div>
 
-      {/* Quick 1-Click Demo Personas */}
-      <div className="mb-6 space-y-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 block text-center">
-          1-Click Seeded Personas
-        </span>
-        <div className="grid grid-cols-2 gap-2.5">
-          <button
-            type="button"
-            onClick={() => handleLogin("ops@vertexcomponents.example")}
-            disabled={submitting}
-            className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <Store className="h-4 w-4 text-neutral-800 group-hover:scale-110 transition-transform" />
-              <span className="text-[11px] font-bold text-neutral-900 leading-tight">Supplier</span>
-            </div>
-            <span className="text-[10px] text-neutral-500 font-medium">Vertex Components</span>
-            <span className="text-[9px] text-emerald-600 font-semibold mt-0.5">₹10L Invoice Live</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleLogin("desk@rapidfin.example")}
-            disabled={submitting}
-            className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <Zap className="h-4 w-4 text-amber-600 fill-amber-600 group-hover:scale-110 transition-transform" />
-              <span className="text-[11px] font-bold text-neutral-900 leading-tight">FinTech</span>
-            </div>
-            <span className="text-[10px] text-neutral-500 font-medium">Rapidfin (T+0)</span>
-            <span className="text-[9px] text-neutral-400 font-semibold mt-0.5">Instant Disbursal</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleLogin("desk@kavericapital.example")}
-            disabled={submitting}
-            className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <Building2 className="h-4 w-4 text-neutral-800 group-hover:scale-110 transition-transform" />
-              <span className="text-[11px] font-bold text-neutral-900 leading-tight">NBFC Fund</span>
-            </div>
-            <span className="text-[10px] text-neutral-500 font-medium">Kaveri Capital</span>
-            <span className="text-[9px] text-neutral-400 font-semibold mt-0.5">₹12 Cr Liquidity</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleLogin("desk@meridianbank.example")}
-            disabled={submitting}
-            className="flex flex-col items-start rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-3 text-left hover:border-black hover:bg-white transition-all shadow-sm group"
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <Landmark className="h-4 w-4 text-neutral-800 group-hover:scale-110 transition-transform" />
-              <span className="text-[11px] font-bold text-neutral-900 leading-tight">Bank</span>
-            </div>
-            <span className="text-[10px] text-neutral-500 font-medium">Meridian Bank</span>
-            <span className="text-[9px] text-neutral-400 font-semibold mt-0.5">11.0% Low APR</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="relative my-4">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-neutral-200/60" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 text-[10px] text-neutral-400 font-medium">Or enter credentials</span>
-        </div>
-      </div>
-
-      {/* Manual Form */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleLogin();
-        }}
-        className="space-y-4"
-      >
-        <div>
-          <label className="block text-xs font-semibold text-neutral-700 mb-1" htmlFor="email">
-            Business Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-neutral-200 bg-neutral-50/50 px-3.5 py-2.5 text-xs text-neutral-900 outline-none focus:border-black focus:bg-white transition"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-neutral-700 mb-1" htmlFor="password">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-neutral-200 bg-neutral-50/50 px-3.5 py-2.5 text-xs text-neutral-900 outline-none focus:border-black focus:bg-white transition"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full flex items-center justify-center gap-2 rounded-full bg-black py-3 text-xs font-semibold text-white shadow-sm hover:bg-neutral-800 transition disabled:opacity-60"
+      {message && (
+        <div
+          role="alert"
+          className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900"
         >
-          {submitting ? (
-            <>
-              <Lock className="h-3.5 w-3.5 animate-spin" />
-              Authenticating...
-            </>
-          ) : (
-            <>
-              Sign In to Marketplace
-              <ArrowRight className="h-3.5 w-3.5" />
-            </>
-          )}
-        </button>
-      </form>
+          {message}
+        </div>
+      )}
 
-      <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-neutral-400 font-medium">
-        <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-        Stitch KYB & Tenancy-Isolated Accounts
+      <button
+        type="button"
+        onClick={signIn}
+        disabled={submitting}
+        className="flex w-full items-center justify-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 shadow-sm transition hover:bg-neutral-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <GoogleMark />
+        {submitting ? "Redirecting…" : "Continue with Google"}
+      </button>
+
+      <div className="mt-6 flex items-start gap-2 text-[11px] leading-relaxed text-neutral-500">
+        <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" />
+        <span>
+          Access is by invitation. Signing in with Google proves who you are; an
+          administrator decides which organisation you may act for.
+        </span>
       </div>
     </motion.div>
   );
@@ -188,10 +130,10 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F5F5F7] px-6 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
       <Suspense fallback={null}>
-        <LoginForm />
+        <LoginCard />
       </Suspense>
-    </div>
+    </main>
   );
 }
