@@ -1,4 +1,4 @@
-﻿# NVIDIA LiteLLM Agent Layer — Internals Explained (Track 3, issue #3)
+﻿# LiteLLM Agent Layer — Internals Explained (Track 3, issue #3)
 
 > Reference doc for the orchestrator/agents. Captures how the schemas, seams, and
 > LangGraph agents fit together, and what the test suite actually proves.

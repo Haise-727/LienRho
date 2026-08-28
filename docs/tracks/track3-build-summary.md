@@ -1,12 +1,12 @@
-﻿# Track 3 — NVIDIA LiteLLM Agents: Build Summary & Rationale
+﻿# Track 3 — LiteLLM Agents: Build Summary & Rationale
 
-> Narrative record of what was built for issue #3 (ElevenLabs Voice AI & NVIDIA LiteLLM Agents)
+> Narrative record of what was built for issue #3 (ElevenLabs Voice AI & LiteLLM Agents)
 > and issue #9 (Track 2/3 contract alignment), why it matters, and the current state.
 > Companion docs: `docs/03c-track3-nexusx-internals.md` (technical internals),
 > `docs/04-repo-analysis.md` (repo-wide review), `ai/decisions.md` (decision log).
 
 ## 1. Goal
-- **issue #3**: build the ElevenLabs Voice AI + NVIDIA LiteLLM agent layer — a CFO Voice Cockpit
+- **issue #3**: build the ElevenLabs Voice AI + LiteLLM agent layer — a CFO Voice Cockpit
   widget plus three multi-agents: `SupplierAgent`, `LenderBiddingAgent`, `MarketClearingAgent`.
 - Built **step-by-step and gated**: the orchestrator reports + runs tests each step; the user
   reviews before the next step proceeds.
