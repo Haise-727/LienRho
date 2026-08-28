@@ -1,4 +1,7 @@
 // Domain Types matching Prisma Schema & Track 1/2 contracts
+// Note: All financial math and matching calculations are computed exclusively
+// on the server (POST /api/match). This file contains strictly domain interfaces,
+// presentation formatters, and seed mock types.
 
 export type VerificationTier = "BUYER_ACCEPTED" | "LEDGER_VERIFIED" | "SUPPLIER_ASSERTED";
 export type OpportunityStatus = 
@@ -153,7 +156,9 @@ export interface CapitalProviderDetail {
   }>;
 }
 
-// ------------------------------------------------------------- Formatters
+// ------------------------------------------------------------- Pure Presentation Formatters
+// No financial derivations or rate maths allowed here.
+
 export function formatINR(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return "₹0";
   const num = typeof value === "string" ? parseFloat(value) : value;
@@ -168,6 +173,18 @@ export function formatINRDecimal(value: number | string | null | undefined): str
   return "₹" + num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+export function formatPaiseToINR(paise: number | null | undefined): string {
+  if (paise === null || paise === undefined || isNaN(paise)) return "₹0.00";
+  const rupees = paise / 100;
+  return "₹" + rupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function formatPaiseToLakhs(paise: number | null | undefined): string {
+  if (paise === null || paise === undefined || isNaN(paise)) return "₹0.00L";
+  const lakhs = paise / 10000000;
+  return `₹${lakhs.toFixed(2)}L`;
+}
+
 export function formatPercent(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return "0.0%";
   const num = typeof value === "string" ? parseFloat(value) : value;
@@ -175,81 +192,9 @@ export function formatPercent(value: number | string | null | undefined): string
   return (num * 100).toFixed(1) + "%";
 }
 
-// ------------------------------------------------------------- Client-side Pareto Fallback Recalibration
-export interface ComputedDeal {
-  bid: Bid;
-  faceValue: number;
-  netCashToday: number;
-  discountCharge: number;
-  flatFee: number;
-  totalCost: number;
-  effectiveApr: number;
-  reserveAmount: number;
-  score: number;
-  speedBadge: string;
-  gateFailures: string[];
-  isDisqualified: boolean;
-}
-
-export function computeDealMetrics(
-  bid: Bid,
-  faceValue: number,
-  urgencyWeight: number = 0.5,
-  sufficiencyFloor?: number,
-  timingDeadlineDays?: number
-): ComputedDeal {
-  const advanceRate = typeof bid.advanceRate === "string" ? parseFloat(bid.advanceRate) : bid.advanceRate;
-  const annualRate = typeof bid.annualRate === "string" ? parseFloat(bid.annualRate) : bid.annualRate;
-  const flatFee = typeof bid.flatFee === "string" ? parseFloat(bid.flatFee) : bid.flatFee;
-  const tenor = bid.tenorDays || 45;
-
-  const advanceCash = faceValue * advanceRate;
-  const daysFraction = tenor / 365.0;
-  const discountCharge = advanceCash * annualRate * daysFraction;
-  const totalCost = discountCharge + flatFee;
-  const netCashToday = advanceCash - discountCharge - flatFee;
-  const reserveAmount = faceValue - advanceCash;
-  const effectiveApr = advanceCash > 0 ? (totalCost / advanceCash) * (365.0 / tenor) : 0;
-
-  // Check gate failures
-  const gateFailures: string[] = [...(bid.gateFailures || [])];
-  if (sufficiencyFloor && netCashToday < sufficiencyFloor && !gateFailures.includes("Fails Sufficiency Floor")) {
-    gateFailures.push("Fails Sufficiency Floor");
-  }
-  if (timingDeadlineDays !== undefined && bid.settlementDays > timingDeadlineDays && !gateFailures.includes("Misses Timing Deadline")) {
-    gateFailures.push("Misses Timing Deadline");
-  }
-
-  // Multi-Attribute Utility Score
-  const costWeight = 1.0 - urgencyWeight;
-  const advanceScore = Math.min(1, Math.max(0, (advanceRate - 0.7) / 0.3));
-  const costScore = Math.min(1, Math.max(0, (0.20 - annualRate) / 0.12));
-  const speedScore = Math.min(1, Math.max(0, (4 - bid.settlementDays) / 4));
-
-  let score = urgencyWeight * (0.6 * speedScore + 0.4 * advanceScore) + costWeight * costScore;
-  if (gateFailures.length > 0) {
-    score *= 0.3; // heavily penalize disqualified offers
-  }
-
-  let speedBadge = "⚡ Instant (T+0)";
-  if (bid.settlementDays === 1) speedBadge = "⚡ 24 Hours (T+1)";
-  else if (bid.settlementDays === 2) speedBadge = "⏳ 48 Hours (T+2)";
-  else if (bid.settlementDays >= 3) speedBadge = `⏳ ${bid.settlementDays} Days (T+${bid.settlementDays})`;
-
-  return {
-    bid,
-    faceValue,
-    netCashToday: bid.netCashToSupplier ? Number(bid.netCashToSupplier) : netCashToday,
-    discountCharge,
-    flatFee,
-    totalCost,
-    effectiveApr: bid.effectiveAnnualCost ? Number(bid.effectiveAnnualCost) : effectiveApr,
-    reserveAmount,
-    score: bid.utilityScore ? Number(bid.utilityScore) : score,
-    speedBadge,
-    gateFailures,
-    isDisqualified: gateFailures.length > 0
-  };
+export function formatBps(bps: number | null | undefined): string {
+  if (bps === null || bps === undefined || isNaN(bps)) return "0.00%";
+  return (bps / 100).toFixed(2) + "%";
 }
 
 // ------------------------------------------------------------- Fallback Seed Mock Data (INR)
@@ -262,10 +207,10 @@ export const FALLBACK_OPPORTUNITY: Opportunity = {
   riskGrade: "A",
   probabilityOfDefault: "0.021000",
   expectedDilutionPct: "0.005000",
-  sufficiencyFloor: "806072.84",
-  timingDeadline: "2026-08-30T12:00:00.000Z",
-  drivingObligation: "September payroll (₹9.0L) + Kalyani Steel (₹46k)",
-  urgencyWeight: "0.450000",
+  sufficiencyFloor: "900000.00",
+  timingDeadline: "2026-08-30T00:00:00.000Z",
+  drivingObligation: "September payroll",
+  urgencyWeight: "0",
   createdAt: new Date().toISOString(),
   invoice: {
     id: "inv-seed-001",
@@ -321,9 +266,9 @@ export const FALLBACK_OPPORTUNITY: Opportunity = {
       recourse: false,
       repaymentStructure: "BULLET",
       status: "ACTIVE",
-      netCashToSupplier: "934171.23",
-      effectiveAnnualCost: "0.142105",
-      utilityScore: "0.910000",
+      netCashToSupplier: "934188.36",
+      effectiveAnnualCost: "0.137300",
+      utilityScore: "1.000000",
       rank: 1,
       gateFailures: [],
       provider: {
@@ -346,11 +291,11 @@ export const FALLBACK_OPPORTUNITY: Opportunity = {
       recourse: true,
       repaymentStructure: "BULLET",
       status: "ACTIVE",
-      netCashToSupplier: "865770.96",
-      effectiveAnnualCost: "0.141527",
-      utilityScore: "0.780000",
+      netCashToSupplier: "865763.84",
+      effectiveAnnualCost: "0.133400",
+      utilityScore: "0.000000",
       rank: 2,
-      gateFailures: [],
+      gateFailures: ["Fails Sufficiency Floor (₹8.66L < ₹9.00L)", "Misses Timing Deadline (31 Aug > 30 Aug)"],
       provider: {
         id: "prov-kaveri",
         name: "Kaveri Capital (NBFC)",
@@ -371,11 +316,11 @@ export const FALLBACK_OPPORTUNITY: Opportunity = {
       recourse: true,
       repaymentStructure: "BULLET",
       status: "ACTIVE",
-      netCashToSupplier: "786643.84",
-      effectiveAnnualCost: "0.140871",
-      utilityScore: "0.320000",
+      netCashToSupplier: "786650.68",
+      effectiveAnnualCost: "0.137600",
+      utilityScore: "0.000000",
       rank: 3,
-      gateFailures: ["Fails Sufficiency Floor (₹7.86L < ₹8.06L)", "Misses Timing Deadline (T+3 > 2 days)"],
+      gateFailures: ["short ₹1.13L", "three days late"],
       provider: {
         id: "prov-meridian",
         name: "Meridian Bank",
