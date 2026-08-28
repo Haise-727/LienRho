@@ -1,9 +1,5 @@
-import { 
-  Opportunity, 
-  CapitalProviderDetail, 
-  FALLBACK_OPPORTUNITY, 
-  FALLBACK_PROVIDER_DETAIL 
-} from "./scoring";
+import { Opportunity, CapitalProviderDetail } from "./scoring";
+import type { MatchResult } from "@/lib/market/types";
 
 export interface DbHealthResult {
   status: "ok" | "degraded" | "unreachable";
@@ -82,12 +78,13 @@ export async function fetchOpportunities(status?: string): Promise<Opportunities
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error("Failed to fetch opportunities");
     const data = await res.json();
-    if (!data.opportunities || data.opportunities.length === 0) {
-      return { count: 1, opportunities: [FALLBACK_OPPORTUNITY], isFallback: true };
-    }
-    return { count: data.count, opportunities: data.opportunities, isFallback: false };
+    return { count: data.count, opportunities: data.opportunities ?? [], isFallback: false };
   } catch {
-    return { count: 1, opportunities: [FALLBACK_OPPORTUNITY], isFallback: true };
+    // No mock fallback. An empty list with isFallback set lets the UI say the
+    // data could not be loaded; substituting invented opportunities would make
+    // a broken connection look like a working marketplace, which is a worse
+    // failure than an empty screen — especially in a demo.
+    return { count: 0, opportunities: [], isFallback: true };
   }
 }
 
@@ -96,22 +93,50 @@ export async function fetchProviders(): Promise<ProvidersResponse> {
     const res = await fetch("/api/providers", { cache: "no-store" });
     if (!res.ok) throw new Error("Failed to fetch providers");
     const data = await res.json();
-    if (!data.providers || data.providers.length === 0) {
-      return { count: 1, providers: [FALLBACK_PROVIDER_DETAIL], isFallback: true };
-    }
-    return { count: data.count, providers: data.providers, isFallback: false };
+    return { count: data.count, providers: data.providers ?? [], isFallback: false };
   } catch {
-    return { count: 1, providers: [FALLBACK_PROVIDER_DETAIL], isFallback: true };
+    return { count: 0, providers: [], isFallback: true };
   }
 }
 
-export async function fetchProviderSelf(providerId: string): Promise<CapitalProviderDetail> {
+export async function fetchProviderSelf(
+  providerId: string,
+): Promise<CapitalProviderDetail | null> {
   try {
     const res = await fetch(`/api/providers?self=${providerId}`, { cache: "no-store" });
     if (!res.ok) throw new Error("Failed to fetch provider self");
     return await res.json();
   } catch {
-    return FALLBACK_PROVIDER_DETAIL;
+    return null;
+  }
+}
+
+/**
+ * Clear one opportunity through the matching engine.
+ *
+ * This is the call that was missing. The UI previously fetched raw bids and
+ * scored them itself, which meant the screen and the audit trail could disagree
+ * — and did, by about 23 basis points on every offer.
+ *
+ * Returns null on failure rather than a fabricated result: "we could not reach
+ * the matching engine" and "here is who should fund you" must never look the
+ * same.
+ */
+export async function matchOpportunity(
+  opportunityId: string,
+  urgencyNudgeBps = 0,
+): Promise<MatchResult | null> {
+  try {
+    const res = await fetch("/api/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ opportunityId, urgencyNudgeBps }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as MatchResult;
+  } catch {
+    return null;
   }
 }
 

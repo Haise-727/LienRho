@@ -25,24 +25,28 @@ import { DbStatusBanner } from "@/components/ui/DbStatusBanner";
 import { 
   Opportunity, 
   CapitalProviderDetail, 
-  computeDealMetrics, 
+  toComputedDeal,
   ComputedDeal, 
-  formatINR,
-  FALLBACK_OPPORTUNITY,
-  FALLBACK_PROVIDER_DETAIL 
+  formatINR
 } from "@/lib/scoring";
 import { 
   fetchOpportunities, 
   fetchProviders, 
   checkDbHealth, 
+  matchOpportunity,
   DbHealthResult 
 } from "@/lib/api-client";
+import type { MatchResult } from "@/lib/market/types";
 
 export default function MarketplaceDashboard() {
   const [activeRole, setActiveRole] = useState<"supplier" | "provider">("supplier");
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([FALLBACK_OPPORTUNITY]);
-  const [selectedOppId, setSelectedOppId] = useState<string>(FALLBACK_OPPORTUNITY.id);
-  const [providers, setProviders] = useState<CapitalProviderDetail[]>([FALLBACK_PROVIDER_DETAIL]);
+  // Empty initial state, not mock data. A screen that renders invented deals
+  // before the real ones arrive teaches everyone to trust figures that were
+  // never computed.
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [selectedOppId, setSelectedOppId] = useState<string>("");
+  const [providers, setProviders] = useState<CapitalProviderDetail[]>([]);
+  const [match, setMatch] = useState<MatchResult | null>(null);
   const [dbHealth, setDbHealth] = useState<DbHealthResult | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -83,23 +87,45 @@ export default function MarketplaceDashboard() {
 
   // Active Opportunity
   const currentOpp = useMemo(() => {
-    return opportunities.find(o => o.id === selectedOppId) || opportunities[0] || FALLBACK_OPPORTUNITY;
+    return opportunities.find(o => o.id === selectedOppId) || opportunities[0];
   }, [opportunities, selectedOppId]);
 
-  // Compute Pareto Utility Rank dynamically whenever slider or opportunity changes
-  const computedDeals = useMemo(() => {
-    const faceVal = typeof currentOpp.invoice?.faceValue === "string" 
-      ? parseFloat(currentOpp.invoice.faceValue) 
-      : Number(currentOpp.invoice?.faceValue || 1000000);
+  // Clear the selected opportunity through the matching engine whenever it or
+  // the urgency nudge changes.
+  //
+  // The scoring is NOT done here. It used to be, and it was wrong three ways at
+  // once — effective cost divided by the advance instead of net cash, gates
+  // applied as a x0.3 score penalty rather than as gates, and the timing check
+  // comparing day counts instead of dates. The engine owns all of it now.
+  useEffect(() => {
+    if (!currentOpp?.id) {
+      setMatch(null);
+      return;
+    }
+    let cancelled = false;
+    matchOpportunity(currentOpp.id, Math.round(urgencyWeight * 10_000)).then((result) => {
+      if (!cancelled) setMatch(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentOpp?.id, urgencyWeight]);
 
-    const floor = currentOpp.sufficiencyFloor 
-      ? Number(currentOpp.sufficiencyFloor) 
-      : undefined;
+  // Map the engine's scored offers onto what the cards render. Winner first,
+  // then remaining survivors, then disqualified offers — which are kept rather
+  // than hidden, because showing why an option lost is the point.
+  const computedDeals = useMemo<ComputedDeal[]>(() => {
+    if (!match) return [];
+    const bidsById = new Map((currentOpp?.bids || []).map((b) => [b.id, b]));
 
-    return (currentOpp.bids || []).map(b => 
-      computeDealMetrics(b, faceVal, urgencyWeight, floor, 2)
-    ).sort((a, b) => b.score - a.score);
-  }, [currentOpp, urgencyWeight]);
+    return [...match.scoredOffers]
+      .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
+      .map((scored) => {
+        const bid = bidsById.get(scored.offer.id);
+        return bid ? toComputedDeal(scored, bid) : null;
+      })
+      .filter((d): d is ComputedDeal => d !== null);
+  }, [match, currentOpp]);
 
   const handleAcceptDeal = (deal: ComputedDeal) => {
     setIsDisbursed(true);
@@ -112,6 +138,35 @@ export default function MarketplaceDashboard() {
     setAudioFeedback(`ElevenLabs Voice Breakdown for ${providerName}: Net advance of ${formatINR(deal.netCashToday)} upfront at ${(Number(deal.bid.annualRate) * 100).toFixed(1)}% APR with total fee of ${formatINR(deal.totalCost)}.`);
     setTimeout(() => setAudioFeedback(null), 6000);
   };
+
+  // No opportunity to show. Previously this state was impossible because the
+  // page started from a hardcoded FALLBACK_OPPORTUNITY, which meant a failed
+  // fetch rendered an invented deal indistinguishable from a real one. Saying
+  // "we could not load this" is the honest answer and the more useful one.
+  if (!currentOpp) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] antialiased">
+        <DbStatusBanner health={dbHealth} />
+        <div className="mx-auto max-w-2xl px-6 py-24 text-center">
+          {loading ? (
+            <p className="text-sm text-neutral-500">Loading the marketplace…</p>
+          ) : (
+            <>
+              <h1 className="text-xl font-semibold text-neutral-900">
+                No opportunities to show
+              </h1>
+              <p className="mt-2 text-sm text-neutral-600">
+                The marketplace is reachable but returned nothing, or the
+                database could not be reached. Check{" "}
+                <code className="rounded bg-neutral-200 px-1">DATABASE_URL</code>{" "}
+                and that the database has been seeded.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] antialiased selection:bg-black selection:text-white">
