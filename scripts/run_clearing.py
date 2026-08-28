@@ -1,10 +1,10 @@
-﻿"""Offline workflow tracer for the NexusX MarketClearingAgent.
+﻿"""Offline workflow tracer for the Agentic Framework MarketClearingAgent.
 
 Run from repo root:
     backend/.venv/Scripts/python.exe scripts/run_clearing.py
 
 No LLM, no network, no external services. Prints each step's real inputs/outputs and
-timing so you can SEE the agent work even with NEXUS_LLM_ENABLED=false.
+timing so you can SEE the agent work even with AGENTIC_FRAMEWORK_LLM_ENABLED=false.
 """
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ import sys
 import time
 from datetime import date, timedelta
 
-from ai.nexus.agents import LenderBiddingAgent, MarketClearingAgent, SupplierAgent
-from ai.nexus.matching import MockMatchingClient
-from ai.nexus.providers import DEFAULT_PROVIDERS
-from ai.nexus.schemas import ClearingRequest, SupplierInput
+from ai.agentic_framework.agents import LenderBiddingAgent, MarketClearingAgent, SupplierAgent
+from ai.agentic_framework.matching import MockMatchingClient
+from ai.agentic_framework.providers import DEFAULT_PROVIDERS
+from ai.agentic_framework.schemas import ClearingRequest, SupplierInput
 
 
 def _ms(t0: float) -> str:
@@ -33,7 +33,7 @@ def main() -> int:
     })
 
     print("=" * 72)
-    print("NEXUSX MARKET-CLEARING WORKFLOW  (offline trace, no LLM)")
+    print("AGENTIC_FRAMEWORKX MARKET-CLEARING WORKFLOW  (offline trace, no LLM)")
     print("=" * 72)
 
     t0 = time.perf_counter()
@@ -64,7 +64,7 @@ def main() -> int:
     print("\n" + "=" * 72)
     print("DONE. Every value above is deterministic math -- no LLM involved.")
     print("The LLM (if enabled) only writes `clearing_summary`; all real decisions")
-    print("are computed and printed here regardless of NEXUS_LLM_ENABLED.")
+    print("are computed and printed here regardless of AGENTIC_FRAMEWORK_LLM_ENABLED.")
     print("=" * 72)
     return 0
 

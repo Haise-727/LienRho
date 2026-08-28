@@ -8,8 +8,8 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from ai.nexus.config import NexusSettings
-from ai.nexus.schemas import LenderBid, MatchResult
+from ai.agentic_framework.config import AgenticFrameworkSettings
+from ai.agentic_framework.schemas import LenderBid, MatchResult
 
 
 class MatchingClient(ABC):
@@ -61,7 +61,7 @@ class MockMatchingClient(MatchingClient):
 
 
 class HttpMatchingClient(MatchingClient):
-    """Real client for Track 2's matching engine, driven by NEXUS_MATCHING_MODE=http.
+    """Real client for Track 2's matching engine, driven by AGENTIC_FRAMEWORK_MATCHING_MODE=http.
 
     Performs a tolerant best-effort mapping of the upstream response into our
     MatchResult placeholder (see issue #9 #4 - the real discriminated-union
@@ -99,7 +99,7 @@ class HttpMatchingClient(MatchingClient):
         )
 
 
-def get_matching_client(settings: NexusSettings) -> MatchingClient:
+def get_matching_client(settings: AgenticFrameworkSettings) -> MatchingClient:
     """Factory selecting the matching backend from settings (env flip)."""
     if settings.matching_mode == "http" and settings.matching_url:
         return HttpMatchingClient(

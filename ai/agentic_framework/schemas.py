@@ -1,4 +1,4 @@
-﻿"""Pydantic v2 contracts for the NexusX agent layer (Track 3).
+﻿"""Pydantic v2 contracts for the Agentic Framework agent layer (Track 3).
 
 Contract note (issue #9, blocking): these are the single source of truth for
 Track 3 I/O.

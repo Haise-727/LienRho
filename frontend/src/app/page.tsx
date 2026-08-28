@@ -341,7 +341,7 @@ export default function MarketplaceDashboard() {
                 Capital Provider Liquidity & Risk Cockpit
               </h1>
               <p className="text-xs text-neutral-500 mt-1">
-                Configure autonomous NexusX bidding parameters, monitor sector exposure caps, and view live clearinghouse matches.
+                Configure autonomous Agentic Framework bidding parameters, monitor sector exposure caps, and view live clearinghouse matches.
               </p>
             </div>
 

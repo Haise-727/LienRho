@@ -1,13 +1,13 @@
-﻿from ai.nexus.config import NexusSettings
-from ai.nexus import llm
-from ai.nexus.prompts import LENDER_SYSTEM_PROMPT
-from ai.nexus.schemas import LenderBid, SupplierInput
-from ai.nexus.providers import ProviderProfile
+﻿from ai.agentic_framework.config import AgenticFrameworkSettings
+from ai.agentic_framework import llm
+from ai.agentic_framework.prompts import LENDER_SYSTEM_PROMPT
+from ai.agentic_framework.schemas import LenderBid, SupplierInput
+from ai.agentic_framework.providers import ProviderProfile
 from langgraph.func import entrypoint, task
 
 
 @task
-def lender_task(supplier: SupplierInput, profile: ProviderProfile, settings: NexusSettings) -> LenderBid:
+def lender_task(supplier: SupplierInput, profile: ProviderProfile, settings: AgenticFrameworkSettings) -> LenderBid:
     # Deterministic: lender terms are fixed by the profile. A supplier-urgency signal
     # may only influence the explanatory note, never the financials (D5).
     llm_text = llm.complete(
@@ -47,9 +47,9 @@ class LenderBiddingAgent:
         self,
         supplier: SupplierInput,
         profile: ProviderProfile,
-        settings: NexusSettings | None = None,
+        settings: AgenticFrameworkSettings | None = None,
     ) -> LenderBid:
-        settings = settings or NexusSettings()
+        settings = settings or AgenticFrameworkSettings()
         return lender_workflow.invoke(
             {"supplier": supplier, "profile": profile, "settings": settings}
         )

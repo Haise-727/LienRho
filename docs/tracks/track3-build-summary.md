@@ -1,12 +1,12 @@
-﻿# Track 3 — NexusX Agents: Build Summary & Rationale
+﻿# Track 3 — Agentic Framework: Build Summary & Rationale
 
-> Narrative record of what was built for issue #3 (ElevenLabs Voice AI & NexusX Agents)
+> Narrative record of what was built for issue #3 (ElevenLabs Voice AI & Agentic Framework Agents)
 > and issue #9 (Track 2/3 contract alignment), why it matters, and the current state.
-> Companion docs: `docs/03c-track3-nexusx-internals.md` (technical internals),
+> Companion docs: `docs/03c-track3-agentic_frameworkx-internals.md` (technical internals),
 > `docs/04-repo-analysis.md` (repo-wide review), `ai/decisions.md` (decision log).
 
 ## 1. Goal
-- **issue #3**: build the ElevenLabs Voice AI + NexusX agent layer — a CFO Voice Cockpit
+- **issue #3**: build the ElevenLabs Voice AI + Agentic Framework agent layer — a CFO Voice Cockpit
   widget plus three multi-agents: `SupplierAgent`, `LenderBiddingAgent`, `MarketClearingAgent`.
 - Built **step-by-step and gated**: the orchestrator reports + runs tests each step; the user
   reviews before the next step proceeds.
@@ -26,7 +26,7 @@ Clearing (`ClearingRequest` -> `ClearingResult`); `MatchResult` is a placeholder
   Track 2 / Track 3 drift.
 
 ### Step 2 — Agents + LangGraph (commits `abe4901`, `664bf7f`)
-Three agents plus supporting modules: `config` (`NexusSettings`, `NEXUS_`-prefixed), an `llm`
+Three agents plus supporting modules: `config` (`AgenticFrameworkSettings`, `AGENTIC_FRAMEWORK_`-prefixed), an `llm`
 seam (text-only), a `matching` seam (`MatchingClient` ABC + `MockMatchingClient`), `providers`
 (`DEFAULT_PROVIDERS`), and `prompts`. The agents were then **rewritten in LangGraph's
 functional API** (`langgraph.func` `entrypoint`/`task`) — workers are `@task`s, the supervisor
@@ -45,9 +45,9 @@ the backend at test/runtime via `backend/conftest.py` + `backend/app/main.py` (`
 
 ### Step 3 — Real matching seam (commit `7b48bbb`)
 Added `HttpMatchingClient` (real `httpx` POST + `tenacity` retry/backoff with jitter) behind the
-`MatchingClient` seam, a `get_matching_client()` factory, and `NexusSettings` fields
-`NEXUS_MATCHING_MODE` (`mock`|`http`), `NEXUS_MATCHING_URL`, `NEXUS_MATCHING_TIMEOUT`,
-`NEXUS_MATCHING_API_KEY`. `MarketClearingAgent` falls back to the env-driven client when none is
+`MatchingClient` seam, a `get_matching_client()` factory, and `AgenticFrameworkSettings` fields
+`AGENTIC_FRAMEWORK_MATCHING_MODE` (`mock`|`http`), `AGENTIC_FRAMEWORK_MATCHING_URL`, `AGENTIC_FRAMEWORK_MATCHING_TIMEOUT`,
+`AGENTIC_FRAMEWORK_MATCHING_API_KEY`. `MarketClearingAgent` falls back to the env-driven client when none is
 injected.
 - **Why it matters**: the **same agent** runs against the Mock now and the real Track 2 engine
   later with **zero code change** — clean decoupling. It also respects the global engineering
@@ -80,7 +80,7 @@ D10 issue #9 alignment; D12 LangGraph functional API; D13 Step 3 env flip.
   audit persistence, frontend proxy) · Step 7 voice gated by **D6** (ElevenLabs secret A/B — still open).
 - `MatchResult` is still a placeholder; its pass-through of Track 2's real discriminated union is
   deferred per issue #9 #4.
-- Test suite: **18 passed** (9 schema + 9 agent). Branch `track3/nexus-agents` is dev-merge-free and pushed.
+- Test suite: **18 passed** (9 schema + 9 agent). Branch `track3/agentic_framework-agents` is dev-merge-free and pushed.
 
 ## 7. Next steps
 - Step 4 backend routers + config; Step 5 audit persistence; Step 6 frontend proxy routes.
@@ -92,6 +92,6 @@ D10 issue #9 alignment; D12 LangGraph functional API; D13 Step 3 env flip.
 From `backend/`:
 ```
 $env:PYTHONPATH = "C:\DevLearning\LienRho\backend"
-.\.venv\Scripts\pytest tests/test_nexus_schemas.py tests/test_nexus_agents.py -q
+.\.venv\Scripts\pytest tests/test_agentic_framework_schemas.py tests/test_agentic_framework_agents.py -q
 ```
 Expect `18 passed`.

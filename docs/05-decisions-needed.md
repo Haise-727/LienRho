@@ -46,7 +46,7 @@ development runs Postgres and Redis under Docker Compose.
 - **Multi-Attribute Utility / Pareto Matching Algorithm**
 - **Redis atomic distributed locking**
 
-### NexusX
+### Agentic Framework
 - **Autonomous multi-agent coordination** (Supplier, Lender, Market Clearing)
 
 ---
@@ -81,7 +81,7 @@ capacity (`03-system-design.md` Module 8).
   frontier logic **is** the deterministic-algorithms showcase. The Redis lock is
   supporting infrastructure, not the demonstration.
 
-**NexusX — still the least defined of the four.** Candidate roles: provider or
+**Agentic Framework — still the least defined of the four.** Candidate roles: provider or
 supplier identity verification, or a multi-agent routing/gateway layer
 dispatching extraction, constraint-checking and scoring with unified
 cost/latency tracking.

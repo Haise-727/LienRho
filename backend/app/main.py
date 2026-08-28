@@ -2,7 +2,7 @@
 from pathlib import Path
 
 # Expose the standalone `ai` package (repo root) so backend modules can import
-# the NexusX AI layer across the package boundary (separation of concerns).
+# the Agentic Framework AI layer across the package boundary (separation of concerns).
 _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)

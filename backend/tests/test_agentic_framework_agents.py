@@ -2,11 +2,11 @@
 from datetime import date, timedelta
 
 import httpx
-from ai.nexus.agents import LenderBiddingAgent, MarketClearingAgent, SupplierAgent
-from ai.nexus.config import NexusSettings
-from ai.nexus.matching import HttpMatchingClient, MockMatchingClient, get_matching_client
-from ai.nexus.providers import DEFAULT_PROVIDERS
-from ai.nexus.schemas import ClearingRequest, LenderBid, SupplierInput, UrgencyLevel
+from ai.agentic_framework.agents import LenderBiddingAgent, MarketClearingAgent, SupplierAgent
+from ai.agentic_framework.config import AgenticFrameworkSettings
+from ai.agentic_framework.matching import HttpMatchingClient, MockMatchingClient, get_matching_client
+from ai.agentic_framework.providers import DEFAULT_PROVIDERS
+from ai.agentic_framework.schemas import ClearingRequest, LenderBid, SupplierInput, UrgencyLevel
 
 
 def _supplier(due_in_days=20, cash_ratio=0.9):
@@ -63,16 +63,16 @@ def test_market_clearing_end_to_end():
 
 
 def test_llm_disabled_uses_deterministic_rationale():
-    settings = NexusSettings(llm_enabled=False)
+    settings = AgenticFrameworkSettings(llm_enabled=False)
     sup = _supplier()
     v = SupplierAgent().assess(sup, settings)
     assert "HIGH" in v.rationale.upper()  # deterministic, not LLM text
 
 
 def test_llm_path_uses_returned_text(monkeypatch):
-    settings = NexusSettings(llm_enabled=True)
+    settings = AgenticFrameworkSettings(llm_enabled=True)
     monkeypatch.setattr(
-        "ai.nexus.llm.complete",
+        "ai.agentic_framework.llm.complete",
         lambda s, sys, usr: "LLM-generated explanation.",
     )
     sup = _supplier()
@@ -82,13 +82,13 @@ def test_llm_path_uses_returned_text(monkeypatch):
 
 def test_get_matching_client_default_mock():
     assert isinstance(
-        get_matching_client(NexusSettings(matching_mode="mock")), MockMatchingClient
+        get_matching_client(AgenticFrameworkSettings(matching_mode="mock")), MockMatchingClient
     )
 
 
 def test_get_matching_client_http():
     assert isinstance(
-        get_matching_client(NexusSettings(matching_mode="http", matching_url="http://x")),
+        get_matching_client(AgenticFrameworkSettings(matching_mode="http", matching_url="http://x")),
         HttpMatchingClient,
     )
 

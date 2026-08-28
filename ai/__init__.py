@@ -1,1 +1,1 @@
-﻿# LIENRHO NexusX AI track - standalone package, importable as 'ai'.
+﻿# LIENRHO Agentic Framework AI track - standalone package, importable as 'ai'.

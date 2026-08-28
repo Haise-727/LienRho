@@ -2,7 +2,7 @@
 from datetime import date, datetime
 from pydantic import ValidationError
 
-from ai.nexus.schemas import (
+from ai.agentic_framework.schemas import (
     SupplierInput,
     UrgencyLevel,
     UrgencyVerdict,

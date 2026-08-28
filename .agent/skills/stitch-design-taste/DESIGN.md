@@ -111,7 +111,7 @@ Every screen must work flawlessly across all viewports. **Responsive is not opti
 - No 3-column equal card layouts for features
 - No centered Hero sections (at this variance level)
 - No filler UI text: "Scroll to explore", "Swipe down", "Discover more below", scroll arrows, bouncing chevrons — all BANNED
-- No generic names: "John Doe", "Sarah Chan", "Acme", "Nexus", "SmartFlow"
+- No generic names: "John Doe", "Sarah Chan", "Acme", "AgenticFramework", "SmartFlow"
 - No fake round numbers: `99.99%`, `50%`, `1234567` — use organic data: `47.2%`, `+1 (312) 847-1928`
 - No AI copywriting clichés: "Elevate", "Seamless", "Unleash", "Next-Gen", "Revolutionize"
 - No broken Unsplash links — use `picsum.photos/seed/{id}/800/600` or SVG UI Avatars

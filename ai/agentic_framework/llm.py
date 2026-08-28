@@ -1,9 +1,9 @@
 ﻿from typing import Optional
 
-from ai.nexus.config import NexusSettings
+from ai.agentic_framework.config import AgenticFrameworkSettings
 
 
-def complete(settings: NexusSettings, system: str, user: str) -> Optional[str]:
+def complete(settings: AgenticFrameworkSettings, system: str, user: str) -> Optional[str]:
     """Return LLM-generated text, or None when disabled/unavailable.
 
     The LLM is used ONLY to produce interpretation/narrative TEXT. Financial values

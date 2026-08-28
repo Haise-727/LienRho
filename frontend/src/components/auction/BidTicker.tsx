@@ -19,7 +19,7 @@ export const BidTicker: React.FC<BidTickerProps> = ({ bids }) => {
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
           </span>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-            Live Institutional Auction Stream (NexusX Bidding Agents)
+            Live Institutional Auction Stream (Agentic Framework Bidding Agents)
           </h4>
         </div>
         <span className="text-[11px] text-neutral-400 font-medium">{bids.length} Institutional Offers Cleared</span>

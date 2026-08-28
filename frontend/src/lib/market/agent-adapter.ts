@@ -1,7 +1,7 @@
 /**
- * Track 3 (NexusX agents) -> Track 2 (scoring) conversion.
+ * Track 3 (Agentic Framework agents) -> Track 2 (scoring) conversion.
  *
- * Track 3's `LenderBid` (`ai/nexus/schemas.py`) and Track 2's `Offer` describe
+ * Track 3's `LenderBid` (`ai/agentic_framework/schemas.py`) and Track 2's `Offer` describe
  * the same thing in different units. Per `docs/07-file-ownership.md`, the
  * adapter lives on the consumer side, so the mapping is here rather than being
  * a change requested of their agents.

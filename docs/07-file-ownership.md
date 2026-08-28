@@ -15,7 +15,7 @@ branches, not a guess made up front.
 |---|---|---|
 | **1 — Data & Ledger** | `frontend/prisma/**`, `frontend/prisma.config.ts`, `frontend/.env.example`, seed scripts | `feat/track-1-prisma-stitch-ledger` |
 | **2 — Matching engine** | `frontend/src/lib/market/**`, `frontend/src/app/api/match/**` | works on `dev` |
-| **3 — Agents & voice** | `ai/**`, `backend/**`, `frontend/src/app/api/voice/**`, `docs/03b-*` | `track3/nexus-agents` |
+| **3 — Agents & voice** | `ai/**`, `backend/**`, `frontend/src/app/api/voice/**`, `docs/03b-*` | `track3/agentic_framework-agents` |
 | **4 — UI** | `frontend/src/components/**`, `frontend/src/app/**` *(pages, not `api/match` or `api/voice`)*, Tailwind/theme config | not started |
 
 **Shared, coordinate before editing:** `frontend/package.json`,

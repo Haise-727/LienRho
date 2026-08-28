@@ -1,14 +1,14 @@
 ﻿from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class NexusSettings(BaseSettings):
-    """Configuration for the NexusX AI layer.
+class AgenticFrameworkSettings(BaseSettings):
+    """Configuration for the Agentic Framework AI layer.
 
     Deliberately isolated from the backend's app config so the ai/ package stays
-    independent. All keys are NEXUS_-prefixed env vars (e.g. NEXUS_LLM_ENABLED=true).
+    independent. All keys are AGENTIC_FRAMEWORK_-prefixed env vars (e.g. AGENTIC_FRAMEWORK_LLM_ENABLED=true).
     """
 
-    model_config = SettingsConfigDict(env_prefix="NEXUS_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="AGENTIC_FRAMEWORK_", env_file=".env", extra="ignore")
 
     llm_enabled: bool = False
     llm_model: str = "gpt-4o-mini"
@@ -21,5 +21,5 @@ class NexusSettings(BaseSettings):
     matching_api_key: str | None = None
 
 
-def get_settings() -> NexusSettings:
-    return NexusSettings()
+def get_settings() -> AgenticFrameworkSettings:
+    return AgenticFrameworkSettings()

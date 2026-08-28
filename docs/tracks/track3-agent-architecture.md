@@ -1,11 +1,11 @@
-﻿# Track 3 - ElevenLabs Voice AI & NexusX Agents: Architecture / Design Plan
+﻿# Track 3 - ElevenLabs Voice AI & Agentic Framework Agents: Architecture / Design Plan
 
-> Source: architect subagent pass over issue #3. Branch: track3/nexus-agents (off dev).
+> Source: architect subagent pass over issue #3. Branch: track3/agentic_framework-agents (off dev).
 > Decision log: ai/decisions.md
 
 ## 0. Design Principles (locked to repo conventions)
 - Single source of truth for contracts: every agent I/O is a Pydantic model in
-  ai/nexus/schemas.py. FastAPI exposes these as response_models,
+  ai/agentic_framework/schemas.py. FastAPI exposes these as response_models,
   flowing into openapi.json -> frontend/src/lib/api-types.ts (generator-driven) ->
   types.ts. Path to a future TS/Zod port with zero drift.
 - Every agent = deterministic core + optional LLM, with enforced fallback (mirrors
@@ -31,10 +31,10 @@ flowchart TD
     subgraph FESRV["Next.js Server Routes (hold ElevenLabs secret)"]
         FV["GET /api/voice/signed-url (elevenlabs-js getSignedUrl)"]
         FD["POST /api/voice/deal-explainer (elevenlabs-js TTS)"]
-        FN["POST /api/nexus/clear (proxy)"]
+        FN["POST /api/agentic_framework/clear (proxy)"]
     end
     subgraph BE["Python FastAPI Backend"]
-        AN["/api/nexus/* routers"]
+        AN["/api/agentic_framework/* routers"]
         MCA["MarketClearingAgent (SUPERVISOR)"]
         SA["SupplierAgent (WORKER)"]
         LA["LenderBiddingAgent (WORKER)"]
@@ -75,7 +75,7 @@ flowchart TD
 | LenderBiddingAgent | Worker - mock bid | LenderBidRequest (carries UrgencyVerdict) | LenderBid | Deterministic mock from fixed fee schedule keyed off urgency tier; simulated=True always at MVP | Optional LLM narrative only; numeric bid still from deterministic generator |
 | MarketClearingAgent | Supervisor - orchestrate + clear | ClearingRequest | ClearingResult | Calls SupplierAgent, then LenderBiddingAgent, then MatchingClient.match; aggregates + full agent_trace | Coordinates same workers; may summarize rationale; match/price from MatchingClient |
 
-System-prompt outlines live in ai/nexus/prompts.py (beside impl).
+System-prompt outlines live in ai/agentic_framework/prompts.py (beside impl).
 Each agent returns its trace: list[str] (mirrors ToolBox.trace) so the supervisor
 assembles ClearingResult.agent_trace and persists it.
 
@@ -87,7 +87,7 @@ sequenceDiagram
     participant UI as CfoVoiceCockpit (FE client)
     participant FV as GET /api/voice/signed-url (Next server)
     participant FD as POST /api/voice/deal-explainer (Next server)
-    participant BE as POST /api/nexus/clear (FastAPI)
+    participant BE as POST /api/agentic_framework/clear (FastAPI)
     participant MCA as MarketClearingAgent
     participant SA as SupplierAgent
     participant LA as LenderBiddingAgent
@@ -100,7 +100,7 @@ sequenceDiagram
     UI->>EL: startSession({signedUrl})
     EL-->>UI: voice responds (mock/echo if no agent)
     UI->>FD: client-tool simulate_outbound_call -> POST deal-explainer
-    FD->>BE: POST /api/nexus/clear {ClearingRequest}
+    FD->>BE: POST /api/agentic_framework/clear {ClearingRequest}
     BE->>MCA: clear(request)
     MCA->>SA: interpret(supplier_input)
     SA-->>MCA: UrgencyVerdict + trace
@@ -123,10 +123,10 @@ With no ElevenLabs key, FD returns the script text and the widget plays/echoes i
 
 Conventions: JSON, camelCase over the wire (serialization_alias +
 populate_by_name=True), all bodies validated by Pydantic.
-nexus_require_auth: bool = False for MVP (standalone runnable); flip to True in
+agentic_require_auth: bool = False for MVP (standalone runnable); flip to True in
 production to attach Depends(get_current_principal).
 
-### 4.1 POST /api/nexus/supplier/interpret
+### 4.1 POST /api/agentic_framework/supplier/interpret
 Request:
 { "supplierId":"SUP-001", "invoiceId":"INV-042", "invoiceAmount":120000.00,
   "dueDate":"2026-09-30", "creditDays":45, "cashNeed":90000.00,
@@ -136,7 +136,7 @@ Response 200 -> UrgencyVerdict:
   "confidence":0.82, "factors":["due in 9d","cashNeed/amount=0.75"],
   "fallbackReason":null, "trace":["SupplierAgent.interpret() -> rule-based"] }
 
-### 4.2 POST /api/nexus/lender/bid
+### 4.2 POST /api/agentic_framework/lender/bid
 Request LenderBidRequest (embeds the verdict):
 { "opportunityId":"OPP-007", "verdict": { ...UrgencyVerdict... },
   "advanceAmount":90000.00, "tenorDays":30, "riskTier":"B" }
@@ -146,7 +146,7 @@ Response 200 -> LenderBid:
   "tenorDays":30, "confidence":0.9, "fallbackReason":null, "simulated":true,
   "trace":["LenderBiddingAgent.bid() -> deterministic mock schedule"] }
 
-### 4.3 POST /api/nexus/clear (supervisor orchestration)
+### 4.3 POST /api/agentic_framework/clear (supervisor orchestration)
 Request ClearingRequest:
 { "opportunityId":"OPP-007", "supplierInput": { ...SupplierInput... },
   "marketContext": { "maxApr":0.18, "minAdvanceRate":0.70 } }
@@ -174,38 +174,38 @@ Response 200 -> DealExplainerResponse:
 { "script":"Supplier ACME has a high-urgency request... matched to Mock Capital Provider at 75% advance, 14% APR.",
   "audioUrl":"/api/voice/audio/OPP-007.mp3", "simulated":true }
 
-### 4.6 GET /api/nexus/agents (A2A "Agent Card" seam)
+### 4.6 GET /api/agentic_framework/agents (A2A "Agent Card" seam)
 Returns the three agent cards (id, role, input/output schema names, endpoint,
 worker list). Hook for a future A2A/MCP wrapper to publish.
 
 ## 5. Module / File Layout
 
 ### Backend (Python FastAPI) - backend/app/
-agents/nexus/
+agents/agentic_framework/
   __init__.py            # exports get_* factories (mirror get_strategist)
   schemas.py             # ALL Pydantic contracts (single source of truth) [DONE in Step 1]
   agents.py              # SupplierAgent, LenderBiddingAgent, MarketClearingAgent (Step 2)
   matching_client.py     # MatchingClient ABC + Mock + Http stub (Step 3)
   prompts.py             # system prompts (beside impl) (Step 2)
   audit.py               # AgentTrace -> durable audit store (Step 5)
-api/nexus.py             # routers (Step 4)
-config.py                # ADD: elevenlabs*, matching_client, nexus_require_auth, voice_widget_mode (Step 4)
-main.py                  # app.include_router(nexus_router) (Step 4)
+api/agentic_framework.py             # routers (Step 4)
+config.py                # ADD: elevenlabs*, matching_client, agentic_require_auth, voice_widget_mode (Step 4)
+main.py                  # app.include_router(agentic_framework_router) (Step 4)
 tests/
-  test_nexus_schemas.py  # [DONE in Step 1]
-  test_nexus_agents.py   # (Step 2)
-  test_nexus_matching.py # (Step 3)
+  test_agentic_framework_schemas.py  # [DONE in Step 1]
+  test_agentic_framework_agents.py   # (Step 2)
+  test_agentic_framework_matching.py # (Step 3)
 
 ### Frontend (Next.js) - frontend/src/
 app/api/
   voice/signed-url/route.ts     # server route -> elevenlabs-js getSignedUrl (Step 7)
-  voice/deal-explainer/route.ts # server route -> /api/nexus/clear + elevenlabs-js TTS (Step 7)
-  nexus/clear/route.ts          # proxy -> FastAPI (Step 6)
+  voice/deal-explainer/route.ts # server route -> /api/agentic_framework/clear + elevenlabs-js TTS (Step 7)
+  agentic_framework/clear/route.ts          # proxy -> FastAPI (Step 6)
 components/
   CfoVoiceCockpit.tsx           # @elevenlabs/react widget (Step 8)
   OutboundCallButton.tsx        # Simulate Outbound Verification Call (Step 8)
   DealExplainerPlayer.tsx       # plays audioUrl or renders script (Step 8)
-lib/nexus-types.ts              # re-export generated api-types for nexus schemas
+lib/agentic_framework-types.ts              # re-export generated api-types for agentic_framework schemas
 
 ## 6. Integration Seams
 
@@ -227,7 +227,7 @@ Future TS / Option-A portability: Pydantic schemas = contract. FastAPI serialize
 into openapi.json -> frontend types regenerated. For TS rewrite, each schema maps 1:1
 to Zod; supervisor logic is plain Python calling typed functions, ports mechanically.
 MatchingClient ABC is already the MCP-style tool boundary; a future A2A wrapper
-publishes GET /api/nexus/agents as Agent Cards and routes worker calls over A2A
+publishes GET /api/agentic_framework/agents as Agent Cards and routes worker calls over A2A
 without touching agent internals.
 
 ## 7. Security & Scalability Notes

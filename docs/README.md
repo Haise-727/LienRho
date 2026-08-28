@@ -46,8 +46,8 @@ understanding the product.
 
 | Doc | Track |
 |---|---|
-| [`tracks/track3-agent-architecture.md`](tracks/track3-agent-architecture.md) | Voice AI and the NexusX agent design |
-| [`tracks/track3-nexusx-internals.md`](tracks/track3-nexusx-internals.md) | How the agent layer works internally |
+| [`tracks/track3-agent-architecture.md`](tracks/track3-agent-architecture.md) | Voice AI and the Agentic Framework agent design |
+| [`tracks/track3-agentic_frameworkx-internals.md`](tracks/track3-agentic_frameworkx-internals.md) | How the agent layer works internally |
 | [`tracks/track3-build-summary.md`](tracks/track3-build-summary.md) | What was built and why |
 | [`tracks/track3-matching-explained.md`](tracks/track3-matching-explained.md) | Where matching sits relative to the agents |
 | [`tracks/track3-testing.md`](tracks/track3-testing.md) | Verifying the agent layer offline |

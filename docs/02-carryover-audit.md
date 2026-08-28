@@ -16,7 +16,7 @@ changes substantially · **DROP** — encodes collections logic, no place here
 | `canonical/` | 88 | **KEEP + extend** | Invoice / Customer / Payment are the right primitives. Needs new entities (Provider, Offer, Opportunity, Match, Settlement) and new invoice fields (buyer acceptance status, verification tier) |
 | `ml_core/` | 768 | **KEEP, repurpose** | The single most valuable asset. Delay prediction becomes **default/late-payment probability feeding provider pricing**. The forecast becomes **supplier urgency inference**. See below |
 | `connectors/` | 867 | **KEEP, reframe** | Reading the ledger of record *is* a verification mechanism. The `AccountingConnector` seam and the Tally XML work transfer directly; what changes is that its output feeds a verification tier rather than a queue |
-| `agents/` | **REWRITE** | Replacing legacy collections agents with NexusX Market Clearing, Supplier, and Lender agents.
+| `agents/` | **REWRITE** | Replacing legacy collections agents with Agentic Framework Market Clearing, Supplier, and Lender agents.
 | `db/` | **REWORK to Prisma** | Moving from SQLAlchemy to Prisma ORM. Adding Stitch-style Double-Entry Ledger models (Account, JournalEntry, Posting). |
 | `auth/` | 376 | **KEEP + extend** | JWT/PBKDF2 machinery is fine. Needs **party types** — a provider must not see another provider's bids, which is a sharper isolation requirement than the current single-tenant model |
 | `api/` | **DROP** | Legacy Python FastAPI routes are removed. Using Next.js API Routes/Server Actions. |

@@ -150,7 +150,7 @@ checks are complementary, and we say which does what.
 ### Agents that judge, never compute
 
 Provider-side bidding, supplier advocacy and market clearing run as agents
-(`ai/nexus/`). **No language model produces a rupee or a rate.** The model
+(`ai/agentic_framework/`). **No language model produces a rupee or a rate.** The model
 chooses posture — aggressive, conservative, decline — and deterministic
 functions compute every number, with each call recorded.
 
@@ -166,7 +166,7 @@ LienRho/
 │     ├─ ledger/          double-entry engine — postEntry(), Day 0 / Day 90 flows
 │     ├─ market/          scoring, gates, Pareto clearing (integer paise)
 │     └─ money.ts         Decimal economics for the ledger
-├─ ai/nexus/              NexusX multi-agent layer — supplier, lender, clearing
+├─ ai/agentic_framework/              Agentic Framework multi-agent layer — supplier, lender, clearing
 ├─ docs/                  analysis and design (start at docs/README.md)
 └─ backend/               ⚠️ legacy Python/FastAPI — superseded, see below
 ```
@@ -175,7 +175,7 @@ LienRho/
 Python agents · TypeScript throughout.
 
 **Sponsors:** Stitch (double-entry ledger) · CodeCrafters (deterministic
-matching, Redis locks) · NexusX (multi-agent coordination) · ElevenLabs (voice).
+matching, Redis locks) · Agentic Framework (multi-agent coordination) · ElevenLabs (voice).
 
 ---
 
@@ -237,7 +237,7 @@ Every requirement from the brief, and where it lives in this repo.
 | **R7** | Complete workflow: verification → risk → discovery → offers → matching → financing → settlement → learning | 13-state `OpportunityStatus` machine; ledger posts Day 0 and Day 90; `Match` records quoted-vs-delivered | ✅ core; learning loop partial |
 
 **Annexure — agent autonomy.** Supplier, lender and market-clearing agents run
-in `ai/nexus/`. Human involvement is reserved for exceptions, as the annexure
+in `ai/agentic_framework/`. Human involvement is reserved for exceptions, as the annexure
 asks. The LLM chooses posture; deterministic functions compute every figure.
 
 **Annexure — settlement reliability.** A match is not complete because an offer
@@ -256,7 +256,7 @@ measurable — the input the learning loop needs.
 |---|---|---|
 | Ragav Hariharan | [@ragavhariharan](https://github.com/ragavhariharan) | **Track 1** — database, Prisma schema, Stitch double-entry ledger, API routes |
 | Harsha Sakamuri | [@Haise-727](https://github.com/Haise-727) | **Track 2** — CodeCrafters matching engine, lexicographic scoring, Redis locks |
-| Tharun | [@ConTresillo](https://github.com/ConTresillo) | **Track 3** — NexusX multi-agent layer, ElevenLabs voice |
+| Tharun | [@ConTresillo](https://github.com/ConTresillo) | **Track 3** — Agentic Framework multi-agent layer, ElevenLabs voice |
 | Yuvaraj | [@YUVARAJ-R-ai](https://github.com/YUVARAJ-R-ai) | **Track 4** — frontend UI, infrastructure, AWS migration plan |
 
 Ownership boundaries are recorded in

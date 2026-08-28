@@ -53,7 +53,7 @@ export const AgentActivityLog: React.FC = () => {
       const newLog: LogMessage = {
         id: Math.random().toString(),
         time,
-        agent: "NexusX Bidding Agent",
+        agent: "Agentic Framework Bidding Agent",
         badgeColor: "bg-amber-100 text-amber-800",
         action: `Evaluated risk spread across 3 institutional pools. Liquidity healthy.`
       };
@@ -80,7 +80,7 @@ export const AgentActivityLog: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-mono text-neutral-300">
-              NexusX
+              Agentic Framework
             </span>
             {isOpen ? <ChevronDown className="h-4 w-4 text-neutral-400" /> : <ChevronUp className="h-4 w-4 text-neutral-400" />}
           </div>

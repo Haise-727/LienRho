@@ -86,7 +86,7 @@ export const PortfolioGauge: React.FC<PortfolioGaugeProps> = ({ providerDetail }
               <Sliders className="h-4 w-4" />
             </div>
             <h3 className="font-semibold text-neutral-900 text-sm tracking-tight">
-              Autonomous Bidding Mandate (NexusX Bidding Agent)
+              Autonomous Bidding Mandate (Agentic Framework Bidding Agent)
             </h3>
           </div>
           <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">

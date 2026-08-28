@@ -1,16 +1,16 @@
-﻿# NexusX Agent Layer — Internals Explained (Track 3, issue #3)
+﻿# Agentic Framework Agent Layer — Internals Explained (Track 3, issue #3)
 
 > Reference doc for the orchestrator/agents. Captures how the schemas, seams, and
 > LangGraph agents fit together, and what the test suite actually proves.
-> Source of truth for Track 3 I/O remains `ai/nexus/schemas.py` (issue #9, blocking).
+> Source of truth for Track 3 I/O remains `ai/agentic_framework/schemas.py` (issue #9, blocking).
 
 ## 1. 10,000-ft view
 Track 3's AI layer is contract-first: Pydantic schemas define the *shapes* of data,
 agents consume/produce those shapes, and two "seams" (LLM + Track 2 matching) are
 walled behind single interfaces so they can be mocked today and real tomorrow.
-Everything lives in `ai/nexus/` and imports only `ai.nexus.*` (never `backend.app.*`).
+Everything lives in `ai/agentic_framework/` and imports only `ai.agentic_framework.*` (never `backend.app.*`).
 
-## 2. Layer 1 — Schemas (the contracts) — `ai/nexus/schemas.py`
+## 2. Layer 1 — Schemas (the contracts) — `ai/agentic_framework/schemas.py`
 Single source of truth for Track 3 I/O (issue #9 is blocking).
 
 - **CamelCase at the boundary, snake_case in code.** Every field uses
@@ -36,7 +36,7 @@ real discriminated-union pass-through (issue #9 #4).
 `SignedUrlResponse`, `DealExplainer*`, `AgentCard` are stubs for later voice/explainer steps.
 
 ## 3. Layer 2 — Supporting modules (the seams)
-- **`config.py` — `NexusSettings`**: `pydantic-settings` with `env_prefix="NEXUS_"`.
+- **`config.py` — `AgenticFrameworkSettings`**: `pydantic-settings` with `env_prefix="AGENTIC_FRAMEWORK_"`.
   Default `llm_enabled=False`. This one flag gates ALL LLM usage.
 - **`llm.py` — `complete()` (the only LLM door)**: if `llm_enabled` is False -> returns
   `None` immediately, **no network call**. If True -> lazily imports `litellm` and calls it,
@@ -104,13 +104,13 @@ ClearingRequest
    v
 ClearingResult (opportunityId, supplierVerdict, lenderBids, match, clearingSummary, simulated)
 ```
-With `NEXUS_LLM_ENABLED=false` (default), `simulated=True` and every
+With `AGENTIC_FRAMEWORK_LLM_ENABLED=false` (default), `simulated=True` and every
 `rationale`/`notes`/`summary` is the deterministic string — **zero external calls**.
 
 ## 6. Tests — what "pytest passed" actually means
 Command run from `backend/` with `PYTHONPATH=C:\DevLearning\LienRho\backend`:
 ```
-.\.venv\Scripts\pytest tests/test_nexus_schemas.py tests/test_nexus_agents.py -q
+.\.venv\Scripts\pytest tests/test_agentic_framework_schemas.py tests/test_agentic_framework_agents.py -q
 ```
 Exit code 0 + "15 passed" means **every assert in all 15 functions evaluated True**
 (and every `pytest.raises(ValidationError)` actually raised). That is the evidence.
@@ -129,7 +129,7 @@ integration with the *real* Track 2 API (MockMatchingClient), real LLM output qu
 (llm off by default; LLM test injects a stub string), or performance/deployment.
 "15 passed" = "the code does exactly what the spec encoded in these tests says" — not
 "production-ready." Real validation lands at Step 3 (HttpMatchingClient) and when
-`NEXUS_LLM_ENABLED=true` is flipped against a live model.
+`AGENTIC_FRAMEWORK_LLM_ENABLED=true` is flipped against a live model.
 
 ## 7. Status (as of this doc)
 - Step 1 schemas (issue #9 aligned: paise, feesPaise absolute, recourse, expiresAt) — DONE
@@ -137,4 +137,4 @@ integration with the *real* Track 2 API (MockMatchingClient), real LLM output qu
 - Step 3 MatchingClient Http + env flip — PENDING
 - Steps 4-8 — PENDING
 - A/B ElevenLabs-secret decision (D6) — PENDING (gates Step 7)
-- Branch `track3/nexus-agents` contains ONLY our commits (the dev merge was undone).
+- Branch `track3/agentic_framework-agents` contains ONLY our commits (the dev merge was undone).

@@ -48,7 +48,7 @@ I will add the necessary UI animation and voice packages.
 #### [NEW] `frontend/src/components/ledger/StitchLedgerTimeline.tsx`
 - A collapsible Double-Entry ledger table (Debits/Credits) proving Day 0 to Day 90 reconciliation.
 #### [NEW] `frontend/src/components/audit/AgentActivityLog.tsx`
-- A sleek side-sheet or bottom-drawer streaming log of autonomous NexusX and CodeCrafters actions.
+- A sleek side-sheet or bottom-drawer streaming log of autonomous Agentic Framework and CodeCrafters actions.
 
 ---
 

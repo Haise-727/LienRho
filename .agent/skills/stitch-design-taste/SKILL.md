@@ -105,7 +105,7 @@ Encode these as explicit "NEVER DO" rules in the DESIGN.md:
 - No custom mouse cursors
 - No overlapping elements — clean spatial separation always
 - No 3-column equal card layouts
-- No generic names ("John Doe", "Acme", "Nexus")
+- No generic names ("John Doe", "Acme", "AgenticFramework")
 - No fake round numbers (`99.99%`, `50%`)
 - No AI copywriting clichés ("Elevate", "Seamless", "Unleash", "Next-Gen")
 - No filler UI text: "Scroll to explore", "Swipe down", scroll arrows, bouncing chevrons

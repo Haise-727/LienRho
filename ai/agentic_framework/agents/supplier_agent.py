@@ -1,9 +1,9 @@
 ﻿from datetime import date
 
-from ai.nexus.config import NexusSettings
-from ai.nexus import llm
-from ai.nexus.prompts import SUPPLIER_SYSTEM_PROMPT
-from ai.nexus.schemas import SupplierInput, UrgencyLevel, UrgencyVerdict
+from ai.agentic_framework.config import AgenticFrameworkSettings
+from ai.agentic_framework import llm
+from ai.agentic_framework.prompts import SUPPLIER_SYSTEM_PROMPT
+from ai.agentic_framework.schemas import SupplierInput, UrgencyLevel, UrgencyVerdict
 from langgraph.func import entrypoint, task
 
 
@@ -38,7 +38,7 @@ def _level_from_factor(factor: float) -> UrgencyLevel:
 
 
 @task
-def supplier_task(supplier: SupplierInput, settings: NexusSettings) -> UrgencyVerdict:
+def supplier_task(supplier: SupplierInput, settings: AgenticFrameworkSettings) -> UrgencyVerdict:
     factor = _deterministic_factor(supplier)
     level = _level_from_factor(factor)
     llm_text = llm.complete(
@@ -70,6 +70,6 @@ def supplier_workflow(payload: dict) -> UrgencyVerdict:
 
 
 class SupplierAgent:
-    def assess(self, supplier: SupplierInput, settings: NexusSettings | None = None) -> UrgencyVerdict:
-        settings = settings or NexusSettings()
+    def assess(self, supplier: SupplierInput, settings: AgenticFrameworkSettings | None = None) -> UrgencyVerdict:
+        settings = settings or AgenticFrameworkSettings()
         return supplier_workflow.invoke({"supplier": supplier, "settings": settings})
