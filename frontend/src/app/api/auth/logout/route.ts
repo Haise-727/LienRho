@@ -1,13 +1,21 @@
-// Ends the session by clearing the cookie (#20).
+// Sign out (#25).
+//
+// Clears the Supabase session server-side rather than only deleting a cookie,
+// so the refresh token is revoked and cannot be replayed.
+//
+// Answers with a 303 redirect because the caller is a plain form POST
+// (AppShell.tsx) navigating the page — JSON here would leave the user looking
+// at `{"ok":true}`. 303 rather than 302 so the browser follows with GET
+// instead of replaying the POST.
 
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const response = NextResponse.redirect(new URL("/login", request.url), {
-    // 303 so the browser follows with GET rather than replaying the POST.
-    status: 303,
-  });
-  response.cookies.set(SESSION_COOKIE, "", { ...sessionCookieOptions, maxAge: 0 });
-  return response;
+  if (isSupabaseConfigured()) {
+    // Writes the session-cookie deletions through the request's cookie store.
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  }
+  return NextResponse.redirect(new URL("/login", request.url), { status: 303 });
 }
