@@ -9,7 +9,7 @@ Based on the `dev` branch analysis, here is what the team has accomplished:
 ## 2. Gap Analysis (What's Missing)
 To make this a complete, production-ready application, we are missing the following standard features:
 1. **Authentication & User Management:** No active session management. Currently relying on hardcoded personas.
-2. **AI Chat Integration:** Missing the Vercel AI SDK and LiteLLM/NexusAI integrations for real-time user assistance.
+2. **AI Chat Integration:** Missing the Vercel AI SDK and LiteLLM/NVIDIA LiteLLM integrations for real-time user assistance.
 3. **Proper Voice Agent:** The ElevenLabs `@elevenlabs/react` widget is not fully wired to a conversational backend.
 4. **Document Verification Agent:** A missing capability to parse uploaded KYB (Know Your Business) and financial documents to upgrade a user's verification tier.
 
@@ -24,7 +24,7 @@ To pivot from the "Apple Light" theme to a professional, high-trust financial ma
 ## 4. Multi-Agent Architecture Plan
 We will implement the following agents to fulfill the problem statement requirements:
 1. **Document Verification Agent (New):** A backend AI agent that accepts PDF uploads (Invoices, Tax IDs), extracts the text, and verifies it against the counterparty (Buyer). Upgrades the `VerificationTier` in the database.
-2. **Platform Copilot (New - Vercel AI SDK):** A persistent chat drawer for Suppliers and Providers. Uses LiteLLM/NexusAI to explain yield calculations, negotiate bids, or answer questions about the marketplace.
+2. **Platform Copilot (New - Vercel AI SDK):** A persistent chat drawer for Suppliers and Providers. Uses LiteLLM/NVIDIA LiteLLM to explain yield calculations, negotiate bids, or answer questions about the marketplace.
 3. **Voice Cockpit (ElevenLabs):** A voice-activated command center for the Capital Provider to quickly approve bulk trades or get daily portfolio briefings.
 
 ---

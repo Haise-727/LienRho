@@ -210,28 +210,28 @@ square. Every movement is a balanced journal entry.
 | Money as integer paise, rates as integer bps | settled |
 | `NO_ACCEPTABLE_OFFER` is a status, not an error | settled |
 | No LLM computes a financial figure | **non-negotiable** |
-| **LiteLLM instead of NexusX** | **new — see below** |
+| **LiteLLM instead of NVIDIA LiteLLM** | **new — see below** |
 | Python FastAPI backend is legacy | see below |
 
 ### The LiteLLM change
 
-**We are dropping NexusX as a sponsor integration and using LiteLLM directly.**
+**We are dropping NVIDIA LiteLLM as a sponsor integration and using LiteLLM directly.**
 
 The important thing to understand: **this is a claims change, not an
 architecture change.** The code already calls LiteLLM —
 `ai/nexus/llm.py` does `from litellm import completion` behind a single seam.
-"NexusX" was the label on the multi-agent coordination, not an implementation.
+"NVIDIA LiteLLM" was the label on the multi-agent coordination, not an implementation.
 
 What actually needs doing:
 
-1. **Docs and pitch language.** Remove NexusX from `docs/03-system-design.md`,
+1. **Docs and pitch language.** Remove NVIDIA LiteLLM from `docs/03-system-design.md`,
    `docs/05-decisions-needed.md`, `docs/README.md` and the track docs. Describe
    the agent layer as *multi-agent coordination on LangGraph, with model access
    through LiteLLM*.
 2. **Package naming, optionally.** `ai/nexus/` and the `nexus` prefix appear
    across ~12 Python files and several docs. Renaming is mechanical but touches
    a lot; it is cosmetic and can wait. Do the docs first.
-3. **Nothing in `frontend/` references NexusX** except doc text — the matching
+3. **Nothing in `frontend/` references NVIDIA LiteLLM** except doc text — the matching
    engine is unaffected.
 
 Keep the discipline that made the agent layer sound: the model chooses
@@ -400,7 +400,7 @@ overclaim. Issue #19.
 1. **Redirect the UI to `/api/match`** — before more components are built on
    numbers that disagree with the API.
 2. **Fix the fee constants** (#17) — one line, on the demo path.
-3. **Update docs for LiteLLM**, dropping NexusX language (§5).
+3. **Update docs for LiteLLM**, dropping NVIDIA LiteLLM language (§5).
 4. **Pareto frontier + degeneracy guard** — makes the "Pareto matching" claim
    honest, and the guard fails loudly when one offer dominates every other on
    every axis, which means the bid generator is broken.

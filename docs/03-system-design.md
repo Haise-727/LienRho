@@ -112,7 +112,7 @@ Provider agents price within their mandates, producing offers that vary across
 rate, advance rate, fees, tenor, settlement speed, recourse, and repayment
 structure.
 
-NexusX multi-agent coordination runs the bidding, with one agent per provider
+NVIDIA LiteLLM multi-agent coordination runs the bidding, with one agent per provider
 evaluating inside its own mandate.
 
 **The agent decides posture — aggressive, conservative, decline — and

@@ -46,11 +46,11 @@ development runs Postgres and Redis under Docker Compose.
 - **Multi-Attribute Utility / Pareto Matching Algorithm**
 - **Redis atomic distributed locking**
 
-### ~~NexusX~~ → LiteLLM — ✅ Changed
+### ~~NVIDIA LiteLLM~~ → LiteLLM — ✅ Changed
 - **Autonomous multi-agent coordination** (Supplier, Lender, Market Clearing),
   on LangGraph, with model access through **LiteLLM**.
 
-**Decision:** NexusX is dropped as a sponsor integration. Model calls go through
+**Decision:** NVIDIA LiteLLM is dropped as a sponsor integration. Model calls go through
 LiteLLM directly.
 
 Worth being clear that this is a **claims change, not an architecture change** —
@@ -103,7 +103,7 @@ capacity (`03-system-design.md` Module 8).
   frontier logic **is** the deterministic-algorithms showcase. The Redis lock is
   supporting infrastructure, not the demonstration.
 
-**NexusX — still the least defined of the four.** Candidate roles: provider or
+**NVIDIA LiteLLM — still the least defined of the four.** Candidate roles: provider or
 supplier identity verification, or a multi-agent routing/gateway layer
 dispatching extraction, constraint-checking and scoring with unified
 cost/latency tracking.

@@ -88,7 +88,7 @@ base above, without waiting on another stream to finish first.
 |---|---|---|
 | **Track 1: Database & Ledger** | Prisma schema | Setup Prisma Double-Entry Ledger (Stitch) & Base Next.js API |
 | **Track 2: Core Matching Engine** | Algorithm | CodeCrafters Pareto Matching Algorithm & Redis Locks |
-| **Track 3: Voice AI & Agents** | ElevenLabs/NexusX | CFO Voice Cockpit, Call Simulator, Market Clearing Agents |
+| **Track 3: Voice AI & Agents** | ElevenLabs/NVIDIA LiteLLM | CFO Voice Cockpit, Call Simulator, Market Clearing Agents |
 | **Track 4: Frontend UI** | Next.js App | Apple-style light theme Dashboard, Live Bid Ticker, Deal Cards |
 
 Cross-cutting, whoever's free: start the `agents/` and `decision_engine/`
@@ -114,9 +114,9 @@ From `00-brief.md` — copy these into `CONTRIBUTING.md` verbatim once it's writ
 
 ---
 
-## All sponsor integrations (ElevenLabs, Stitch, CodeCrafters, NexusX) ARE in this MVP phase.
+## All sponsor integrations (ElevenLabs, Stitch, CodeCrafters, NVIDIA LiteLLM) ARE in this MVP phase.
 
 Per your call: AWS/cloud infra and the three sponsor integrations (voice
-verification, the Rust/Go clearing engine, NexusX) are **not** part of getting
+verification, the Rust/Go clearing engine, NVIDIA LiteLLM) are **not** part of getting
 to a working base. They stay in `05-decisions-needed.md` as open questions to
 revisit only once phases 0–3 of `04-build-plan.md` are solid.
