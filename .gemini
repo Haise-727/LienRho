@@ -1,0 +1,5 @@
+# LienRho Antigravity Rules
+
+## Artifacts
+Always create artifacts directly in the repository itself (e.g., in the `docs/` or root directory) instead of using the global default artifact directory (`~/.gemini/...`). 
+When using the `write_to_file` tool to create artifacts, do NOT include the `ArtifactMetadata` property; just write standard markdown files into the repository to ensure they are tracked by version control.
