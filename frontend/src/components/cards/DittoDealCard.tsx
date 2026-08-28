@@ -2,20 +2,23 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Volume2, ArrowRight, ShieldCheck, Lock, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
-import { ComputedDeal, formatINR, formatPercent } from "@/lib/scoring";
+import { Volume2, ArrowRight, ShieldCheck, Lock, Sparkles, AlertCircle, CheckCircle2, FileText, Calendar, Zap } from "lucide-react";
+import type { ScoredOffer } from "@/lib/api-client";
+import { formatPaiseToINR, formatBps } from "@/lib/scoring";
 
 interface DittoDealCardProps {
-  deal: ComputedDeal;
+  offer: ScoredOffer;
   isBestMatch?: boolean;
-  onAccept: (deal: ComputedDeal) => void;
-  onPlayAudio: (deal: ComputedDeal) => void;
+  onAccept: (offer: ScoredOffer) => void;
+  onViewLedger?: (offer: ScoredOffer) => void;
+  onPlayAudio?: (offer: ScoredOffer) => void;
 }
 
 export const DittoDealCard: React.FC<DittoDealCardProps> = ({
-  deal,
+  offer,
   isBestMatch = false,
   onAccept,
+  onViewLedger,
   onPlayAudio
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -25,159 +28,211 @@ export const DittoDealCard: React.FC<DittoDealCardProps> = ({
     setIsProcessing(true);
     setTimeout(() => {
       setIsProcessing(false);
-      onAccept(deal);
+      onAccept(offer);
     }, 800);
   };
 
   const handleAudioClick = () => {
     setIsPlayingAudio(true);
-    onPlayAudio(deal);
+    if (onPlayAudio) {
+      onPlayAudio(offer);
+    }
     setTimeout(() => setIsPlayingAudio(false), 3500);
   };
 
-  const providerName = deal.bid.provider?.name || "Institutional Provider";
-  const archetype = deal.bid.provider?.archetype || "LP";
+  const handleViewLedgerClick = () => {
+    if (onViewLedger) {
+      onViewLedger(offer);
+    } else {
+      const element = document.getElementById("ledger-timeline");
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  };
+
+  const providerName = offer.providerName || "Institutional Provider";
+  const advancePercent = (offer.offer.advanceRateBps / 100).toFixed(1) + "%";
+  const annualApr = (offer.offer.annualRateBps / 100).toFixed(2) + "%";
+  const trueCost = formatBps(offer.effectiveCostBps);
+  const settlementDays = offer.offer.settlementDays;
+  const isDisqualified = offer.disqualified;
+
+  // Format speed badge
+  let speedText = `T+${settlementDays}`;
+  if (settlementDays === 0) speedText = "Instant (T+0)";
+  else if (settlementDays === 1) speedText = "24h (T+1)";
+  else if (settlementDays === 3) speedText = "3 Days (T+3)";
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`relative rounded-3xl p-6 transition-all duration-200 ${
-        deal.isDisqualified
-          ? "bg-neutral-50/50 border border-red-200/80 opacity-80"
+      className={`relative rounded-xl p-6 transition-all duration-200 border ${
+        isDisqualified
+          ? "bg-white/80 border-slate-200/90 shadow-xs opacity-90"
           : isBestMatch
-          ? "bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-2 border-black"
-          : "bg-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-neutral-200/80 hover:border-neutral-300"
+          ? "bg-white border-2 border-emerald-600 shadow-md ring-4 ring-emerald-50"
+          : "bg-white border-slate-200 shadow-xs hover:border-slate-300 hover:shadow-sm"
       }`}
     >
       {/* Top Banner for Best Match */}
-      {isBestMatch && !deal.isDisqualified && (
-        <div className="absolute -top-3.5 left-6 flex items-center gap-1.5 rounded-full bg-black px-3.5 py-1 text-xs font-semibold text-white shadow-sm">
-          <Sparkles className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
+      {isBestMatch && !isDisqualified && (
+        <div className="absolute -top-3.5 left-6 flex items-center gap-1.5 rounded-full bg-[#059669] px-3 py-0.5 text-xs font-semibold text-white shadow-xs tracking-tight">
+          <Sparkles className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
           Pareto Optimum Match (Rank #1)
         </div>
       )}
 
       {/* Header Info */}
-      <div className="flex items-start justify-between mt-1 mb-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-900 font-bold text-sm">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mt-1 mb-5">
+        <div className="flex items-center gap-3.5">
+          <div className={`flex h-11 w-11 items-center justify-center rounded-lg font-bold text-sm shadow-xs ${
+            isBestMatch && !isDisqualified
+              ? "bg-[#0F172A] text-white"
+              : "bg-slate-100 text-slate-800 border border-slate-200"
+          }`}>
             {providerName.substring(0, 2).toUpperCase()}
           </div>
           <div>
-            <h4 className="font-semibold text-neutral-900 text-base tracking-tight flex items-center gap-2">
-              {providerName}
-              <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-600">
-                {archetype}
-              </span>
-              {deal.bid.recourse ? (
-                <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-600">
-                  Recourse
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-bold text-[#0F172A] text-base tracking-tight">
+                {providerName}
+              </h4>
+              {offer.offer.recourse === "NON_RECOURSE" ? (
+                <span className="rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80 px-2 py-0.5 text-[10px] font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Non-Recourse
                 </span>
               ) : (
-                <span className="rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-medium flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" /> Non-Recourse
+                <span className="rounded bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 text-[10px] font-medium">
+                  With Recourse
                 </span>
               )}
-            </h4>
-            <span className="text-xs text-neutral-500 font-medium flex items-center gap-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Stitch Verified Institution
-            </span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 font-medium">
+              <span className="flex items-center gap-1 text-emerald-700">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Stitch Verified Institutional LP
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-end">
-          <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold border ${
-            deal.isDisqualified
-              ? "bg-red-50 text-red-700 border-red-200"
-              : "bg-amber-50 text-amber-800 border-amber-200/60"
-          }`}>
-            {deal.speedBadge}
-          </span>
-          <span className="text-[11px] text-neutral-400 mt-1 font-medium">
-            Utility Score: {(deal.score * 100).toFixed(0)}/100
+        <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-1.5 self-start">
+          {isDisqualified ? (
+            <span className="inline-flex items-center gap-1 rounded bg-[#D97706] text-white px-2.5 py-1 text-xs font-bold shadow-xs uppercase tracking-wider text-[11px]">
+              Disqualified
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-900 px-2.5 py-1 text-xs font-semibold">
+              <Zap className="h-3 w-3 text-emerald-600 fill-emerald-600" /> {speedText}
+            </span>
+          )}
+          <span className="text-[11px] text-slate-400 font-mono">
+            {offer.rank ? `Rank #${offer.rank} by True Cost` : "Disqualified by Gate"}
           </span>
         </div>
       </div>
 
-      {/* Disqualification Tag if any */}
-      {deal.isDisqualified && (
-        <div className="mb-4 rounded-2xl bg-red-50 p-3 border border-red-200 text-xs text-red-800 flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-          <span>
-            <strong>Disqualified by Gate:</strong> {deal.gateFailures.join(" • ")}
-          </span>
+      {/* Disqualification Reason (Server Verbatim Explanation) */}
+      {isDisqualified && (
+        <div className="mb-4 rounded-lg bg-amber-50/80 p-3.5 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+          <AlertCircle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-semibold text-amber-950 block">Gate Disqualification Notice:</span>
+            {!offer.gates.sufficiency.passed && (
+              <p className="text-amber-900 leading-relaxed">
+                • <strong>Sufficiency Gate:</strong> {offer.gates.sufficiency.reason}
+              </p>
+            )}
+            {!offer.gates.timing.passed && (
+              <p className="text-amber-900 leading-relaxed">
+                • <strong>Timing Gate:</strong> {offer.gates.timing.reason}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Plain-English Breakdown Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-4 rounded-2xl bg-neutral-50/80 p-4 border border-neutral-200/60">
-        <div>
-          <span className="text-xs text-neutral-500 font-medium block">Net Cash Today</span>
-          <span className="text-xl font-bold tracking-tight text-neutral-900 block mt-0.5">
-            {formatINR(deal.netCashToday)}
+      {/* Plain-English Breakdown Grid with Tabular Monospace Financials */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-4 rounded-lg bg-[#F8FAFC] p-4 border border-slate-200/90">
+        <div className="space-y-0.5">
+          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">Net Cash Delivered</span>
+          <span className="text-2xl font-bold tracking-tight text-[#0F172A] block font-mono">
+            {formatPaiseToINR(offer.netCashPaise)}
           </span>
-          <span className="text-[11px] text-emerald-600 font-medium">
-            {formatPercent(deal.bid.advanceRate)} upfront advance
-          </span>
-        </div>
-
-        <div>
-          <span className="text-xs text-neutral-500 font-medium block">Total Cost to Finance</span>
-          <span className="text-xl font-bold tracking-tight text-neutral-900 block mt-0.5">
-            {formatINR(deal.totalCost)}
-          </span>
-          <span className="text-[11px] text-neutral-500 font-medium">
-            {formatPercent(deal.bid.annualRate)} APR + {formatINR(deal.flatFee)} fee
+          <span className="text-xs text-emerald-700 font-medium block">
+            {advancePercent} upfront advance ({formatPaiseToINR(offer.advancePaise)})
           </span>
         </div>
 
-        <div>
-          <span className="text-xs text-neutral-500 font-medium block">Remaining at Maturity</span>
-          <span className="text-xl font-bold tracking-tight text-neutral-900 block mt-0.5">
-            {formatINR(deal.reserveAmount)}
+        <div className="space-y-0.5">
+          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">True Effective Cost</span>
+          <span className="text-2xl font-bold tracking-tight text-[#0F172A] block font-mono">
+            {trueCost}
           </span>
-          <span className="text-[11px] text-neutral-500 font-medium">
-            Released upon buyer settlement
+          <span className="text-xs text-slate-500 font-medium block">
+            {annualApr} headline APR + {formatPaiseToINR(offer.offer.feesPaise)} fee
+          </span>
+        </div>
+
+        <div className="space-y-0.5">
+          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">Disbursal & Timing</span>
+          <span className="text-2xl font-bold tracking-tight text-[#0F172A] block font-mono">
+            {speedText}
+          </span>
+          <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+            <Calendar className="h-3 w-3 text-slate-400" /> Lands {offer.arrivalDate}
           </span>
         </div>
       </div>
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-neutral-100 gap-3">
-        <button
-          onClick={handleAudioClick}
-          className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium transition ${
-            isPlayingAudio
-              ? "bg-purple-100 text-purple-700 animate-pulse"
-              : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-          }`}
-        >
-          <Volume2 className="h-3.5 w-3.5" />
-          {isPlayingAudio ? "ElevenLabs Playing..." : "Play 30s Audio Breakdown"}
-        </button>
+      <div className="flex flex-wrap items-center justify-between pt-3 border-t border-slate-100 gap-3">
+        <div className="flex items-center gap-2">
+          {onPlayAudio && (
+            <button
+              onClick={handleAudioClick}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border transition ${
+                isPlayingAudio
+                  ? "bg-slate-200 text-[#0F172A] border-slate-300 animate-pulse"
+                  : "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
+              }`}
+            >
+              <Volume2 className="h-3.5 w-3.5 text-slate-600" />
+              {isPlayingAudio ? "ElevenLabs Playing..." : "Audio Breakdown"}
+            </button>
+          )}
 
+          {/* Secondary Outline Action Button */}
+          <button
+            onClick={handleViewLedgerClick}
+            className="flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-semibold border border-[#E2E8F0] text-[#0F172A] bg-transparent hover:bg-slate-100 transition shadow-2xs"
+          >
+            <FileText className="h-3.5 w-3.5 text-slate-600" />
+            View Ledger Trail
+          </button>
+        </div>
+
+        {/* Primary Bid Acceptance Button */}
         <button
           onClick={handleAcceptClick}
-          disabled={isProcessing || deal.isDisqualified}
-          className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-xs font-semibold shadow-sm transition-all ${
-            deal.isDisqualified
-              ? "bg-neutral-300 text-neutral-500 cursor-not-allowed"
-              : isBestMatch
-              ? "bg-black text-white hover:bg-neutral-800"
-              : "bg-neutral-900 text-white hover:bg-black"
+          disabled={isProcessing || isDisqualified}
+          className={`flex items-center gap-2 rounded-md px-5 py-2 text-xs font-semibold shadow-xs transition-all ${
+            isDisqualified
+              ? "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-200"
+              : "bg-[#059669] hover:bg-[#047857] text-white shadow-sm hover:shadow"
           }`}
         >
           {isProcessing ? (
             <>
-              <Lock className="h-3.5 w-3.5 animate-spin" />
-              Redis Locking & Posting...
+              <Lock className="h-3.5 w-3.5 animate-spin text-white" />
+              Processing Disbursal...
             </>
           ) : (
             <>
-              Accept & Disburse
-              <ArrowRight className="h-3.5 w-3.5" />
+              Accept Terms & Disburse
+              <ArrowRight className="h-3.5 w-3.5 text-white" />
             </>
           )}
         </button>

@@ -274,13 +274,21 @@ async function main() {
   // before demoing OAuth, or nobody can get in.
 
   const allowlist: { email: string; displayName: string; org: string; role: "OWNER" | "MEMBER" }[] = [
-    { email: "ops@vertexcomponents.example", displayName: "Vertex Components — Ops", org: SUPPLIER, role: "OWNER" },
+    // The four of us. Email is globally unique, so one address maps to exactly
+    // one org — spread across party types so the team collectively covers
+    // supplier, provider and platform views. To demo the other side, change the
+    // `org` here and reseed rather than editing the row by hand: a reseed would
+    // otherwise wipe the edit.
+    { email: "ragav6032022@gmail.com", displayName: "Ragav Hariharan", org: PLATFORM_SLUG, role: "OWNER" },
+    { email: "justaweebwithinternet@gmail.com", displayName: "Harsha Sakamuri", org: SUPPLIER, role: "OWNER" },
+    { email: "yuvaraj28022005@gmail.com", displayName: "Yuvaraj", org: "meridian-bank", role: "OWNER" },
+    { email: "tharoonsays@gmail.com", displayName: "Tharun", org: "rapidfin", role: "OWNER" },
+
+    // Placeholders so every seeded org has an owner. Nobody can sign in as
+    // these — no Google account owns an @example address, which is the point.
     { email: "finance@kalingaprecision.example", displayName: "Kalinga Precision — Finance", org: SUPPLIER2, role: "OWNER" },
-    { email: "desk@meridianbank.example", displayName: "Meridian Bank — Origination", org: "meridian-bank", role: "OWNER" },
     { email: "desk@kavericapital.example", displayName: "Kaveri Capital — Desk", org: "kaveri-capital", role: "OWNER" },
-    { email: "desk@rapidfin.example", displayName: "Rapidfin — Desk", org: "rapidfin", role: "OWNER" },
     { email: "desk@ashwincredit.example", displayName: "Ashwin Credit Fund — Desk", org: "ashwin-credit-fund", role: "OWNER" },
-    { email: "admin@lienrho.example", displayName: "LienRho — Platform", org: PLATFORM_SLUG, role: "OWNER" },
   ];
 
   const orgIdBySlug: Record<string, string> = {

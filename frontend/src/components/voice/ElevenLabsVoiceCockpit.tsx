@@ -20,7 +20,7 @@ export const ElevenLabsVoiceCockpit: React.FC<ElevenLabsVoiceCockpitProps> = ({
   const [transcript, setTranscript] = useState<Array<{ sender: "user" | "cfo"; text: string }>>([
     {
       sender: "cfo",
-      text: "Hello! I am your AI CFO. I've analyzed your $100,000 receivable from Metro Retail. Alpha Bank is offering $88,000 upfront in 2 hours. Would you like me to prioritize speed or negotiate a lower APR?"
+      text: "Hello! I am your AI Treasury Assistant. I've analyzed your ₹10,00,000 receivable from Bharat Auto Ltd. Rapidfin is offering ₹9,34,188 upfront (T+0). Would you like to accept or review timing constraints?"
     }
   ]);
   const [userQuery, setUserQuery] = useState("");
@@ -47,15 +47,15 @@ export const ElevenLabsVoiceCockpit: React.FC<ElevenLabsVoiceCockpitProps> = ({
     setIsSpeaking(true);
 
     setTimeout(() => {
-      let reply = "Understood. Re-weighting your auction for immediate liquidity with Redis distributed locks.";
+      let reply = "Understood. Re-clearing your auction via POST /api/match with updated urgency override.";
       if (text.toLowerCase().includes("cost") || text.toLowerCase().includes("rate") || text.toLowerCase().includes("apr")) {
-        reply = "Optimizing for lowest total cost of capital. Horizon NBFC offers 9.8% APR, saving you $320 in fees.";
+        reply = "Evaluating true cost of capital: denominator is net cash delivered. Kaveri Capital offers 13.34% true cost but arrives past your 30 August payroll deadline.";
       } else if (text.toLowerCase().includes("accept") || text.toLowerCase().includes("disburse")) {
-        reply = "Executing instant disbursal. Stitch double-entry journal entry #8902 has been posted. $88,000 credited to your primary account.";
+        reply = "Executing instant disbursal with Rapidfin. Stitch double-entry journal entry has been posted. ₹9,34,188 credited to Vertex Components cash account.";
       }
       setTranscript([...newHistory, { sender: "cfo" as const, text: reply }]);
       setIsSpeaking(false);
-    }, 1500);
+    }, 1200);
   };
 
   return (
@@ -65,67 +65,67 @@ export const ElevenLabsVoiceCockpit: React.FC<ElevenLabsVoiceCockpitProps> = ({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
         >
           <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            initial={{ scale: 0.98, opacity: 0, y: 15 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: 20 }}
-            className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl border border-black/5"
+            exit={{ scale: 0.98, opacity: 0, y: 15 }}
+            className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-2xl border border-slate-200"
           >
             {/* Top Bar */}
-            <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4 bg-neutral-50/50">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-slate-50">
               <div className="flex items-center gap-3">
-                <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black text-white">
-                  <Sparkles className="h-4 w-4" />
+                <div className="relative flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white">
+                  <Sparkles className="h-4 w-4 text-emerald-400" />
                   {isSpeaking && (
-                    <span className="absolute -inset-1 rounded-full border-2 border-black/40 animate-ping" />
+                    <span className="absolute -inset-1 rounded-md border-2 border-emerald-500/40 animate-ping" />
                   )}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-neutral-900 text-sm tracking-tight flex items-center gap-2">
+                  <h3 className="font-semibold text-slate-900 text-sm tracking-tight flex items-center gap-2">
                     CFO Voice Cockpit
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
-                      <Radio className="h-3 w-3 animate-pulse text-emerald-500" /> ElevenLabs WebRTC
+                    <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 border border-emerald-200">
+                      <Radio className="h-3 w-3 animate-pulse text-emerald-600" /> ElevenLabs WebRTC
                     </span>
                   </h3>
-                  <p className="text-xs text-neutral-500">Autonomous Treasury & Multi-Attribute Advisor</p>
+                  <p className="text-xs text-slate-500">Autonomous Multi-Attribute Treasury Advisor</p>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition"
+                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Audio Wave Visualizer Area */}
-            <div className="flex flex-col items-center justify-center py-8 px-6 bg-gradient-to-b from-neutral-50/80 to-white">
-              <div className="flex items-center justify-center gap-1.5 h-16 w-full">
-                {[40, 65, 90, 45, 80, 100, 70, 50, 85, 30, 95, 60, 40].map((height, i) => (
+            <div className="flex flex-col items-center justify-center py-6 px-6 bg-slate-50/50 border-b border-slate-100">
+              <div className="flex items-center justify-center gap-1.5 h-12 w-full">
+                {[30, 50, 75, 40, 65, 80, 55, 40, 70, 25, 75, 50, 30].map((height, i) => (
                   <motion.div
                     key={i}
                     animate={
                       isSpeaking || isListening
-                        ? { height: [12, height, 16, height * 0.8, 12] }
-                        : { height: 8 }
+                        ? { height: [8, height, 12, height * 0.7, 8] }
+                        : { height: 6 }
                     }
                     transition={{
                       repeat: Infinity,
-                      duration: 1.2,
-                      delay: i * 0.08,
+                      duration: 1.1,
+                      delay: i * 0.07,
                       ease: "easeInOut"
                     }}
                     className={`w-1.5 rounded-full ${
-                      isSpeaking ? "bg-black" : isListening ? "bg-emerald-500" : "bg-neutral-200"
+                      isSpeaking ? "bg-emerald-600" : isListening ? "bg-slate-900" : "bg-slate-200"
                     }`}
                   />
                 ))}
               </div>
-              <p className="mt-4 text-xs font-medium text-neutral-500">
+              <p className="mt-3 text-xs font-medium text-slate-500">
                 {isSpeaking
-                  ? "CFO Voice Agent Speaking..."
+                  ? "Voice Agent Speaking..."
                   : isListening
                   ? "Listening to voice input..."
                   : "Voice channel active. Tap microphone to speak."}
@@ -133,17 +133,17 @@ export const ElevenLabsVoiceCockpit: React.FC<ElevenLabsVoiceCockpitProps> = ({
             </div>
 
             {/* Live Conversation Stream */}
-            <div className="max-h-60 overflow-y-auto px-6 py-2 space-y-3">
+            <div className="max-h-60 overflow-y-auto px-6 py-3 space-y-3">
               {transcript.map((msg, idx) => (
                 <div
                   key={idx}
                   className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
+                    className={`max-w-[85%] rounded-lg px-3.5 py-2 text-xs leading-relaxed ${
                       msg.sender === "user"
-                        ? "bg-black text-white"
-                        : "bg-neutral-100 text-neutral-800"
+                        ? "bg-[#0F172A] text-white"
+                        : "bg-slate-100 text-slate-900 border border-slate-200/60"
                     }`}
                   >
                     {msg.text}
@@ -153,28 +153,28 @@ export const ElevenLabsVoiceCockpit: React.FC<ElevenLabsVoiceCockpitProps> = ({
             </div>
 
             {/* Action Bar */}
-            <div className="border-t border-neutral-100 p-4 bg-white flex items-center gap-2">
+            <div className="border-t border-slate-200 p-4 bg-white flex items-center gap-2">
               <button
                 onClick={() => setIsListening(!isListening)}
-                className={`flex h-11 w-11 items-center justify-center rounded-full transition-all ${
+                className={`flex h-10 w-10 items-center justify-center rounded-md transition-all ${
                   isListening
-                    ? "bg-red-500 text-white shadow-lg shadow-red-200 scale-105"
-                    : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                    ? "bg-red-600 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
                 }`}
               >
-                {isListening ? <Mic className="h-5 w-5 animate-pulse" /> : <MicOff className="h-5 w-5" />}
+                {isListening ? <Mic className="h-4 w-4 animate-pulse" /> : <MicOff className="h-4 w-4" />}
               </button>
               <input
                 type="text"
-                placeholder="Ask CFO e.g., 'Prioritize speed' or 'Explain fees'..."
+                placeholder="Ask CFO e.g., 'Prioritize speed' or 'Explain Kaveri gate failure'..."
                 value={userQuery}
                 onChange={e => setUserQuery(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSendPrompt(userQuery)}
-                className="flex-1 rounded-full border border-neutral-200 bg-neutral-50/50 px-4 py-2.5 text-xs text-neutral-900 placeholder:text-neutral-400 focus:border-black focus:bg-white focus:outline-none transition"
+                className="flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:bg-white focus:outline-none transition"
               />
               <button
                 onClick={() => handleSendPrompt(userQuery)}
-                className="rounded-full bg-black px-4 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition"
+                className="rounded-md bg-[#0F172A] hover:bg-slate-800 px-4 py-2 text-xs font-semibold text-white transition"
               >
                 Send
               </button>
