@@ -45,7 +45,7 @@ export function RiskParameterForm({ provider }: RiskParameterFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xs space-y-6">
+    <form onSubmit={handleSubmit} className="border border-slate-200 bg-white p-8 space-y-6">
       <div className="flex items-center justify-between pb-4 border-b border-slate-100">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
@@ -193,7 +193,7 @@ export function RiskParameterForm({ provider }: RiskParameterFormProps) {
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-6 py-2.5 text-xs font-bold shadow-xs transition cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-6 py-2.5 text-xs font-bold transition cursor-pointer"
         >
           <Save className="h-3.5 w-3.5" />
           <span>{saving ? "Saving..." : "Save Underwriting Rules"}</span>

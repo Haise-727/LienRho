@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { DollarSign, TrendingUp, Layers, ShieldCheck, Landmark, Activity } from "lucide-react";
 import { formatINR } from "@/lib/scoring";
 
 interface MetricsRowProps {
@@ -22,68 +21,67 @@ export function MetricsRow({
   averageYield = "12.4%",
 }: MetricsRowProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border border-slate-200">
       {/* Total Liquid Capital Available */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-1">
-        <div className="flex items-center justify-between text-slate-400">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            Available Liquidity
-          </span>
-          <Landmark className="h-4 w-4 text-slate-400" />
-        </div>
-        <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
-          {formatINR(availableLiquidity)}
-        </div>
-        <div className="text-xs text-slate-500 font-medium">
-          Pool Total: {formatINR(totalLiquidity)}
+      <div className="bg-white p-6 border-b sm:border-b-0 sm:border-r border-slate-200 flex flex-col justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+          Available Liquidity
+        </span>
+        <div>
+          <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
+            {formatINR(availableLiquidity)}
+          </div>
+          <div className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">
+            Pool Total: {formatINR(totalLiquidity)}
+          </div>
         </div>
       </div>
 
       {/* Capital Deployed */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-1">
-        <div className="flex items-center justify-between text-slate-400">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            Total Capital Deployed
-          </span>
-          <TrendingUp className="h-4 w-4 text-emerald-600" />
-        </div>
-        <div className="text-2xl font-bold font-mono text-emerald-700 tracking-tight">
-          {formatINR(deployedCapital)}
-        </div>
-        <div className="text-xs text-emerald-700 font-medium flex items-center gap-1">
-          <span>Active Book Yield: {averageYield}</span>
+      <div className="bg-white p-6 border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+          Total Capital Deployed
+        </span>
+        <div>
+          <div className="text-2xl font-bold font-mono text-emerald-700 tracking-tight">
+            {formatINR(deployedCapital)}
+          </div>
+          <div className="text-[11px] text-emerald-600 font-medium mt-1 uppercase tracking-wider">
+            Active Book Yield: {averageYield}
+          </div>
         </div>
       </div>
 
       {/* Hurdle Rate / Yield Target */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-1">
-        <div className="flex items-center justify-between text-slate-400">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            Hurdle Rate Target
-          </span>
-          <Activity className="h-4 w-4 text-blue-600" />
-        </div>
-        <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
-          {hurdleRate}
-        </div>
-        <div className="text-xs text-slate-500 font-medium">
-          Automated pricing floor
+      <div className="bg-white p-6 border-b sm:border-b-0 sm:border-r border-slate-200 flex flex-col justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+          Hurdle Rate Target
+        </span>
+        <div>
+          <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
+            {hurdleRate}
+          </div>
+          <div className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">
+            Automated pricing floor
+          </div>
         </div>
       </div>
 
       {/* Active Deal Flow in Market */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-1">
-        <div className="flex items-center justify-between text-slate-400">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+      <div className="bg-white p-6 flex flex-col justify-between">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
             Matching Deal Flow
           </span>
-          <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+          <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
         </div>
-        <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
-          {activeAuctionsCount} Live Auctions
-        </div>
-        <div className="text-xs text-slate-500 font-medium">
-          Agent bidding actively
+        <div>
+          <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
+            {activeAuctionsCount} Live Deals
+          </div>
+          <div className="text-[11px] text-slate-400 font-medium mt-1 uppercase tracking-wider">
+            Agent bidding actively
+          </div>
         </div>
       </div>
     </div>

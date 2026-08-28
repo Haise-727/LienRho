@@ -4,15 +4,16 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ActiveAuctionsFeed, LiveAuctionItem } from "@/components/lender/ActiveAuctionsFeed";
 import { fetchOpportunities } from "@/lib/api-client";
-import { ArrowLeft, Activity, Radio, Cpu, Sliders, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Sliders, Activity } from "lucide-react";
 
 export default function LenderLiveDealStreamPage() {
   const [auctions, setAuctions] = useState<LiveAuctionItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const oppsRes = await fetchOpportunities();
-      {
+      try {
+        const oppsRes = await fetchOpportunities();
         const items: LiveAuctionItem[] = oppsRes.opportunities.map((o) => {
           let statusText: "SUBMITTED" | "ACCEPTED" | "DECLINED" = "SUBMITTED";
           let reasonText = "Passed risk floor and sector concentration check";
@@ -44,13 +45,15 @@ export default function LenderLiveDealStreamPage() {
           };
         });
         setAuctions(items);
+      } finally {
+        setIsLoading(false);
       }
     }
     load();
   }, []);
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto py-2">
+    <div className="space-y-8 max-w-6xl mx-auto py-2">
       {/* Top Bar Navigation */}
       <div className="flex items-center justify-between">
         <Link
@@ -63,7 +66,7 @@ export default function LenderLiveDealStreamPage() {
 
         <Link
           href="/dashboard/lender/rules"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0047FF] hover:text-blue-800 transition-colors"
         >
           <Sliders className="h-3.5 w-3.5" />
           Adjust Underwriting Rules
@@ -71,25 +74,20 @@ export default function LenderLiveDealStreamPage() {
       </div>
 
       {/* Main View Header */}
-      <div>
-        <div className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1.5">
-          <Activity className="h-3.5 w-3.5 text-emerald-600 animate-pulse" />
-          NexusX Multi-Agent Live Audit Stream · Step 3
+      <div className="border-b border-slate-100 pb-6">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 bg-slate-100">
+          <Activity className="h-3.5 w-3.5" />
+          NexusX Multi-Agent Live Audit Stream
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
           Live Deal Flow & Autonomous Underwriting
         </h1>
-        <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+        <p className="text-sm text-slate-500 mt-2 max-w-2xl leading-relaxed">
           Purely observational. Watch your autonomous LiteLLM underwriting agent evaluate live marketplace opportunities and deploy liquidity in real-time.
         </p>
       </div>
 
-      {/* 1. Active Auctions Feed */}
-      <ActiveAuctionsFeed auctions={auctions} />
-
-      {/* 2. Enclosed Collapsible Terminal Console */}
-      <div className="pt-4">
-      </div>
+      <ActiveAuctionsFeed auctions={auctions} isLoading={isLoading} />
     </div>
   );
 }
