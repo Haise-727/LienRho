@@ -256,8 +256,8 @@ measurable — the input the learning loop needs.
 |---|---|---|
 | Ragav Hariharan | [@ragavhariharan](https://github.com/ragavhariharan) | **Track 1** — database, Prisma schema, Stitch double-entry ledger, API routes |
 | Harsha Sakamuri | [@Haise-727](https://github.com/Haise-727) | **Track 2** — CodeCrafters matching engine, lexicographic scoring, Redis locks |
-| Tharoon | [@ConTresillo](https://github.com/ConTresillo) | **Track 3** — NexusX multi-agent layer, ElevenLabs voice |
-| Yuvaraj R | [@YUVARAJ-R-ai](https://github.com/YUVARAJ-R-ai) | **Track 4** — frontend UI, infrastructure, AWS migration plan |
+| Tharun | [@ConTresillo](https://github.com/ConTresillo) | **Track 3** — NexusX multi-agent layer, ElevenLabs voice |
+| Yuvaraj | [@YUVARAJ-R-ai](https://github.com/YUVARAJ-R-ai) | **Track 4** — frontend UI, infrastructure, AWS migration plan |
 
 Ownership boundaries are recorded in
 [`docs/07-file-ownership.md`](docs/07-file-ownership.md), which is how four
@@ -291,6 +291,8 @@ worth your time:
   regulatory reality
 - [`03-system-design.md`](docs/03-system-design.md) — architecture, agents, the
   full opportunity lifecycle
+- [`09-database.md`](docs/09-database.md) — the data model in full: every table,
+  the money conventions, the double-entry ledger mechanics, and the invariants
 
 Track 1's integration guide lives at
 [`frontend/prisma/README.md`](frontend/prisma/README.md).

@@ -57,7 +57,13 @@ export async function POST(request: Request) {
 
     const opportunity = await prisma.financingOpportunity.findUnique({
       where: { id: opportunityId },
-      include: { invoice: { select: { faceValue: true } } },
+      include: {
+        invoice: { select: { faceValue: true } },
+        // Without this join the gates fall back to the stored columns, which
+        // Track 1 leaves null by design — and clearing silently degrades to
+        // cost-only ranking.
+        cashPosition: { include: { obligations: { orderBy: { dueDate: 'asc' } } } },
+      },
     });
     if (!opportunity) return fail(`No opportunity ${opportunityId}`, 404);
 
@@ -139,7 +145,16 @@ async function scoreStoredBids({
   asOf,
   urgencyNudgeBps,
 }: {
-  opportunity: { invoice: { faceValue: unknown }; sufficiencyFloor: unknown; timingDeadline: Date | null };
+  opportunity: {
+    invoice: { faceValue: unknown };
+    sufficiencyFloor: unknown;
+    timingDeadline: Date | null;
+    cashPosition: {
+      currentCashPaise: number;
+      cashThresholdPaise: number;
+      obligations: { label: string; amountPaise: number; dueDate: Date }[];
+    } | null;
+  };
   opportunityId: string;
   asOf: string;
   urgencyNudgeBps: number;
@@ -155,6 +170,19 @@ async function scoreStoredBids({
       invoice: { faceValue: opportunity.invoice.faceValue as string },
       sufficiencyFloor: opportunity.sufficiencyFloor as string | null,
       timingDeadline: opportunity.timingDeadline,
+      // Dates become YYYY-MM-DD here because Track 2's types use IsoDate
+      // strings — they survive JSON intact, where a Date does not.
+      cashPosition: opportunity.cashPosition
+        ? {
+            currentCashPaise: opportunity.cashPosition.currentCashPaise,
+            cashThresholdPaise: opportunity.cashPosition.cashThresholdPaise,
+            obligations: opportunity.cashPosition.obligations.map((o) => ({
+              label: o.label,
+              amountPaise: o.amountPaise,
+              dueDate: o.dueDate.toISOString().slice(0, 10),
+            })),
+          }
+        : null,
     },
     // Prisma Decimals stringify correctly for the adapter, which parses decimal
     // text rather than going through Number().

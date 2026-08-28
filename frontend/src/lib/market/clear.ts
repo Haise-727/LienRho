@@ -16,7 +16,8 @@
 import { bidToOffer, decimalToPaise, toIsoDate } from './prisma-adapter';
 import type { PrismaBidRow, DecimalLike } from './prisma-adapter';
 import { scoreOffers } from './score';
-import { supplierUtilityFromStored } from './utility';
+import { deriveSupplierUtility, supplierUtilityFromStored } from './utility';
+import type { SupplierCashPosition } from './types';
 import type { Bps, IsoDate, MatchResult, ScoredOffer } from './types';
 
 /** `FinancingOpportunity` joined to its invoice, structurally. */
@@ -26,6 +27,15 @@ export interface PrismaOpportunityRow {
   invoice: { faceValue: DecimalLike };
   sufficiencyFloor: DecimalLike | null;
   timingDeadline: Date | string | null;
+  /**
+   * The supplier's cash facts, when the caller joined them in.
+   *
+   * Preferred over the stored columns when present: the gates are then derived
+   * from dated obligations at clearing time rather than read from whatever was
+   * last written, which is what makes "we infer need from the supplier's real
+   * cash position" true rather than aspirational.
+   */
+  cashPosition?: SupplierCashPosition | null;
 }
 
 /** A bid joined to the provider that made it. */
@@ -58,11 +68,22 @@ export function clearOpportunity({
   asOf: IsoDate;
   urgencyNudgeBps?: Bps;
 }): MatchResult {
-  const utility = supplierUtilityFromStored(
-    opportunity.sufficiencyFloor === null ? null : decimalToPaise(opportunity.sufficiencyFloor),
-    opportunity.timingDeadline === null ? null : toIsoDate(opportunity.timingDeadline),
-    asOf,
-  );
+  // Derive from the cash position when we have one; fall back to the stored
+  // columns otherwise.
+  //
+  // The order matters and is not cosmetic. `supplierUtilityFromStored` returns
+  // `unconstrained` when both columns are null, which means no gates and
+  // cost-only ranking — a *silent* degradation to exactly the behaviour this
+  // project exists to argue against. Track 1 nulls those columns on purpose
+  // (issue #7) so that the derivation is real, so preferring the position is
+  // what keeps the gates alive.
+  const utility = opportunity.cashPosition
+    ? deriveSupplierUtility(opportunity.cashPosition, asOf)
+    : supplierUtilityFromStored(
+        opportunity.sufficiencyFloor === null ? null : decimalToPaise(opportunity.sufficiencyFloor),
+        opportunity.timingDeadline === null ? null : toIsoDate(opportunity.timingDeadline),
+        asOf,
+      );
 
   const providerNames = Object.fromEntries(bids.map((b) => [b.provider.id, b.provider.name]));
 

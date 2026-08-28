@@ -15,6 +15,9 @@ supply-chain working capital, built for CSI ORIGIN 2026 Problem Statement 5.
 | [`01-commerce-analysis.md`](01-commerce-analysis.md) | How this market actually works — the economics, the worked example that is the whole product, auction design, anti-fraud, and the regulatory reality |
 | [`03-system-design.md`](03-system-design.md) | The architecture: modules, agents, the data model, and the full opportunity lifecycle |
 
+Working in the code? [`09-database.md`](09-database.md) is the reference — what
+every table holds, why, and what is guaranteed about it.
+
 ---
 
 ## Core sequence
@@ -32,6 +35,7 @@ Written to be read in order. Each one answers a specific question.
 | [`06-implementation-plan.md`](06-implementation-plan.md) | The four parallel tracks and what each owns |
 | [`07-file-ownership.md`](07-file-ownership.md) | Who works where — the map that keeps four people out of each other's diffs |
 | [`08-aws-migration-plan.md`](08-aws-migration-plan.md) | Sprint 2: Supabase → Aurora, ECS Fargate, ElastiCache |
+| [`09-database.md`](09-database.md) | **The data model in full** — every table, the money conventions, the ledger mechanics, invariants, and query recipes |
 
 ---
 
