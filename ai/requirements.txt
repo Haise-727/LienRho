@@ -2,3 +2,5 @@
 pydantic>=2.9
 pydantic-settings>=2.6
 sqlalchemy>=2.0
+# optional: only needed when NEXUS_LLM_ENABLED=true (lazy import; not required to run)
+# litellm>=1.97.0

@@ -67,3 +67,12 @@ Track 3's LenderBid/Offer mapping was mismatched with Track 2's `Offer`. Resolve
 - Unit conversions (advanceRate 0..1 -> bps, apr -> bps, hours -> days) owned by Track 2
   adapter (owner's offer); Track 3 keeps float rates / hours.
 
+
+## D11 - Step 2 agents implemented (deterministic core + optional LLM)
+SupplierAgent (urgency verdict), LenderBiddingAgent (deterministic bid generator),
+MarketClearingAgent (supervisor). Each has a deterministic core; the LLM (gated by
+NEXUS_LLM_ENABLED, default OFF) emits ONLY interpretation/narrative text - never
+financials (D5). The single LLM seam is `ai.nexus.llm.complete` (lazy litellm import,
+so ai/ stays dependency-light). MatchingClient is an ABC; MockMatchingClient ranks bids
+by effective cost until Step 3 wires HttpMatchingClient. Provider terms live as frozen
+profiles in `ai/nexus/providers.py`; flat fees mirror docs/01's Rs 2,500 example.

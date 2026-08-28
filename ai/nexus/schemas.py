@@ -71,6 +71,7 @@ class LenderBid(BaseModel):
     recourse: bool = Field(alias="recourse")
     expires_at: Optional[datetime] = Field(default=None, alias="expiresAt")
     confidence: float = Field(alias="confidence", ge=0, le=1)
+    notes: str = Field(default="", alias="notes")
     simulated: bool = Field(default=False, alias="simulated")
 
 
@@ -92,7 +93,7 @@ class ClearingRequest(BaseModel):
 
     opportunity_id: str = Field(alias="opportunityId")
     supplier: SupplierInput = Field(alias="supplier")
-    bids: List[LenderBid] = Field(alias="bids")
+    bids: List[LenderBid] = Field(default_factory=list, alias="bids")
 
 
 class ClearingResult(BaseModel):
@@ -140,4 +141,5 @@ class AgentCard(BaseModel):
     model: str = Field(alias="model")
     tools: List[str] = Field(default_factory=list, alias="tools")
     description: str = Field(default="", alias="description")
+
 
