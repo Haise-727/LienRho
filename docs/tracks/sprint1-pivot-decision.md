@@ -1,7 +1,7 @@
 # Implementation Plan: Hackathon MVP Alignment (Option A)
 
 ## Goal Description
-We need to fully align the LienRho repository with the CSI ORIGIN 2026 Problem Statement 5 and the requirements from all four sponsors (ElevenLabs, Stitch, CodeCrafters, NexusX). We will transition the project's technical direction to **Option A** (Next.js Full-Stack, Prisma ORM, Redis, and ElevenLabs React SDK) and away from the legacy Python FastAPI + SQLAlchemy stack. We also need to embrace a high-end, Apple-style light mode aesthetic with marketing aspects for the UI.
+We need to fully align the LienRho repository with the CSI ORIGIN 2026 Problem Statement 5 and the requirements from all four sponsors (ElevenLabs, Stitch, CodeCrafters, LiteLLM). We will transition the project's technical direction to **Option A** (Next.js Full-Stack, Prisma ORM, Redis, and ElevenLabs React SDK) and away from the legacy Python FastAPI + SQLAlchemy stack. We also need to embrace a high-end, Apple-style light mode aesthetic with marketing aspects for the UI.
 
 Since this is a 24-hour hackathon and the goal is a super-fast MVP in 2 hours for a team of 4, we will:
 1. Revise all planning docs to reflect this new unified architecture and sponsor commitments.
@@ -19,7 +19,7 @@ Since this is a 24-hour hackathon and the goal is a super-fast MVP in 2 hours fo
 I will rewrite the following docs to remove the "deferred" status of sponsors and replace the FastAPI/SQLAlchemy legacy references with the new Next.js/Prisma/Redis stack:
 - **`README.md` & `docs/README.md`:** Update the "Quickstart" and tech stack definitions.
 - **`docs/00-brief.md` & `docs/02-carryover-audit.md`:** Document the complete removal of the Python legacy collections code in favor of the new TypeScript full-stack unified architecture.
-- **`docs/03-system-design.md`:** Update to explicitly detail the Stitch Double-Entry Ledger, CodeCrafters Pareto Algorithm, ElevenLabs Voice AI, and NexusX Multi-Agent integration.
+- **`docs/03-system-design.md`:** Update to explicitly detail the Stitch Double-Entry Ledger, CodeCrafters Pareto Algorithm, ElevenLabs Voice AI, and LiteLLM Multi-Agent integration.
 - **`docs/04-build-plan.md` & `docs/05-decisions-needed.md`:** Change all sponsor integrations from "Deferred" to "Phase 1 MVP Core". Define the Apple-style marketing UI direction.
 - **`docs/06-implementation-plan.md`:** Restructure the implementation plan into the 4 distinct tracks below to prevent merge conflicts.
 
@@ -34,8 +34,8 @@ I will run the GitHub CLI to create the following 4 issues (each labeled `P0` an
 - **Title:** `Implement CodeCrafters Pareto algorithm & Redis concurrency locks`
 - **Scope:** Build the deterministic Multi-Attribute Utility function (evaluating Advance Rate, APR, Disbursal Latency, Fees). Implement Redis locking for atomic bid matching to prevent double-spending.
 
-#### Track 3: Voice AI & NexusX Agent Logic
-- **Title:** `Integrate ElevenLabs Voice UI & NexusX Multi-Agent coordination`
+#### Track 3: Voice AI & LiteLLM Agent Logic
+- **Title:** `Integrate ElevenLabs Voice UI & LiteLLM Multi-Agent coordination`
 - **Scope:** Add `@elevenlabs/react` widget for the CFO Voice Cockpit and Outbound Verification Bot. Scaffold the Market Clearing and Lender Bidding multi-agent logic.
 
 #### Track 4: Frontend UI (Apple-style Light Theme)

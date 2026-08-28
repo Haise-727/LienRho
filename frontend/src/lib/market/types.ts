@@ -259,6 +259,15 @@ export interface ScoredOffer {
   disqualified: boolean;
   /** 1-based rank among surviving offers by effective cost. Null if disqualified. */
   rank: number | null;
+  /**
+   * Id of an offer that beats this one on cash, cost AND speed simultaneously,
+   * or null when this offer is on the non-dominated frontier.
+   *
+   * Purely informational — dominance never decides the winner, the gates do.
+   * The UI can collapse dominated offers as noise, since an option that is
+   * worse in every respect than another is not a choice a person needs to make.
+   */
+  dominatedBy: string | null;
 }
 
 // ------------------------------------------------------------------ matching
@@ -278,6 +287,11 @@ export type MatchResult =
       allocations: Allocation[];
       scoredOffers: ScoredOffer[];
       utility: SupplierUtility;
+      market: MarketHealth;
+      /** How the advance was funded, in words. Set when allocation ran. */
+      allocationNote?: string;
+      /** Paise of the advance that could not be funded. 0 when fully covered. */
+      shortfallPaise?: Paise;
     }
   | {
       status: 'NO_ACCEPTABLE_OFFER';
@@ -286,7 +300,25 @@ export type MatchResult =
       scoredOffers: ScoredOffer[];
       utility: SupplierUtility;
       reason: string;
+      market: MarketHealth;
     };
+
+/**
+ * Whether the offer set itself looks like a real market.
+ *
+ * Separate from the clearing outcome on purpose: a degenerate bid set still
+ * clears, and refusing to would be worse than clearing with the problem
+ * recorded. What matters is that it stops being invisible.
+ */
+export interface MarketHealth {
+  /** Offer ids on the non-dominated frontier — the ones worth comparing. */
+  frontier: string[];
+  /**
+   * Set when one offer beats every other on every axis, which indicates the
+   * bids were generated wrongly rather than that one provider is better.
+   */
+  degeneracyWarning: string | null;
+}
 
 /**
  * One provider's share of a filled opportunity. A list of length > 1 means the

@@ -16,7 +16,11 @@
 import { bidToOffer, decimalToPaise, toIsoDate } from './prisma-adapter';
 import type { PrismaBidRow, DecimalLike } from './prisma-adapter';
 import { scoreOffers } from './score';
-import { supplierUtilityFromStored } from './utility';
+import { analyseFrontier, degeneracyWarning } from './pareto';
+import { allocate, explainAllocation } from './allocate';
+import type { ProviderCapacity } from './allocate';
+import { deriveSupplierUtility, supplierUtilityFromStored } from './utility';
+import type { SupplierCashPosition } from './types';
 import type { Bps, IsoDate, MatchResult, ScoredOffer } from './types';
 
 /** `FinancingOpportunity` joined to its invoice, structurally. */
@@ -26,6 +30,15 @@ export interface PrismaOpportunityRow {
   invoice: { faceValue: DecimalLike };
   sufficiencyFloor: DecimalLike | null;
   timingDeadline: Date | string | null;
+  /**
+   * The supplier's cash facts, when the caller joined them in.
+   *
+   * Preferred over the stored columns when present: the gates are then derived
+   * from dated obligations at clearing time rather than read from whatever was
+   * last written, which is what makes "we infer need from the supplier's real
+   * cash position" true rather than aspirational.
+   */
+  cashPosition?: SupplierCashPosition | null;
 }
 
 /** A bid joined to the provider that made it. */
@@ -52,17 +65,35 @@ export function clearOpportunity({
   bids,
   asOf,
   urgencyNudgeBps = 0,
+  capacities,
 }: {
   opportunity: PrismaOpportunityRow;
   bids: PrismaBidWithProvider[];
   asOf: IsoDate;
   urgencyNudgeBps?: Bps;
+  /**
+   * Provider capacity read fresh at clearing time. Omit to skip allocation and
+   * report the intended winner only — useful for agent bids, which are not
+   * backed by a persisted provider record.
+   */
+  capacities?: Record<string, ProviderCapacity>;
 }): MatchResult {
-  const utility = supplierUtilityFromStored(
-    opportunity.sufficiencyFloor === null ? null : decimalToPaise(opportunity.sufficiencyFloor),
-    opportunity.timingDeadline === null ? null : toIsoDate(opportunity.timingDeadline),
-    asOf,
-  );
+  // Derive from the cash position when we have one; fall back to the stored
+  // columns otherwise.
+  //
+  // The order matters and is not cosmetic. `supplierUtilityFromStored` returns
+  // `unconstrained` when both columns are null, which means no gates and
+  // cost-only ranking — a *silent* degradation to exactly the behaviour this
+  // project exists to argue against. Track 1 nulls those columns on purpose
+  // (issue #7) so that the derivation is real, so preferring the position is
+  // what keeps the gates alive.
+  const utility = opportunity.cashPosition
+    ? deriveSupplierUtility(opportunity.cashPosition, asOf)
+    : supplierUtilityFromStored(
+        opportunity.sufficiencyFloor === null ? null : decimalToPaise(opportunity.sufficiencyFloor),
+        opportunity.timingDeadline === null ? null : toIsoDate(opportunity.timingDeadline),
+        asOf,
+      );
 
   const providerNames = Object.fromEntries(bids.map((b) => [b.provider.id, b.provider.name]));
 
@@ -75,6 +106,18 @@ export function clearOpportunity({
     urgencyNudgeBps,
   });
 
+  // Dominance is annotated onto every offer, not only survivors: a degenerate
+  // bid set is a fact about what the providers produced, and filtering to
+  // gate-passers first would hide a broken generator behind the gates.
+  const analysis = analyseFrontier(scoredOffers);
+  for (const offer of scoredOffers) {
+    offer.dominatedBy = analysis.dominatedBy[offer.offer.id] ?? null;
+  }
+  const market = {
+    frontier: analysis.frontier,
+    degeneracyWarning: degeneracyWarning(analysis, scoredOffers),
+  };
+
   if (survivors.length === 0) {
     return {
       status: 'NO_ACCEPTABLE_OFFER',
@@ -82,10 +125,50 @@ export function clearOpportunity({
       scoredOffers,
       utility,
       reason: explainNoMatch(scoredOffers),
+      market,
     };
   }
 
   const winner = survivors[0];
+
+  // Capacity-aware allocation runs only when the caller supplied a fresh read of
+  // provider capacity. Without it we report the intended winner and leave
+  // providerLiquidityAfterPaise at -1, so an un-allocated result is obviously
+  // un-allocated rather than looking like a provider with no money left.
+  if (capacities) {
+    const outcome = allocate({
+      survivors,
+      targetPaise: winner.advancePaise,
+      capacities,
+    });
+
+    if (outcome.allocations.length === 0) {
+      // Offers cleared the supplier's gates but nobody could fund them. That is
+      // a different failure from "no offer was good enough", and conflating the
+      // two would tell the supplier to change terms when the real answer is to
+      // wait for capacity.
+      return {
+        status: 'NO_ACCEPTABLE_OFFER',
+        opportunityId: opportunity.id,
+        scoredOffers,
+        utility,
+        reason: explainAllocation(outcome, winner.advancePaise),
+        market,
+      };
+    }
+
+    return {
+      status: 'MATCHED',
+      opportunityId: opportunity.id,
+      allocations: outcome.allocations,
+      scoredOffers,
+      utility,
+      market,
+      allocationNote: explainAllocation(outcome, winner.advancePaise),
+      shortfallPaise: outcome.shortfallPaise,
+    };
+  }
+
   return {
     status: 'MATCHED',
     opportunityId: opportunity.id,
@@ -95,15 +178,12 @@ export function clearOpportunity({
         providerId: winner.offer.providerId,
         providerName: winner.providerName,
         fundedPaise: winner.advancePaise,
-        // Filled in by the allocation step, which re-reads the provider's
-        // committed capacity inside a transaction. Left at -1 rather than 0 so
-        // an un-allocated result is obviously un-allocated rather than looking
-        // like a provider with no money left.
         providerLiquidityAfterPaise: -1,
       },
     ],
     scoredOffers,
     utility,
+    market,
   };
 }
 

@@ -1,4 +1,4 @@
-﻿# Testing & Verifying the NexusX Layer (Track 3)
+﻿# Testing & Verifying the LiteLLM Layer (Track 3)
 
 ## TL;DR
 Everything runs **OFFLINE by default**. The LLM is off (`NEXUS_LLM_ENABLED=false`), so

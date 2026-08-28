@@ -1,4 +1,4 @@
-﻿# Matching in NexusX — what it is and why it is here
+﻿# Matching in LiteLLM — what it is and why it is here
 
 ## 1. "Matching" in this product
 LienRho is an invoice-financing marketplace. A supplier has an unpaid invoice and needs cash

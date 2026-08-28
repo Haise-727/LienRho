@@ -59,6 +59,40 @@ function fingerprint(sellerTaxId: string, buyerTaxId: string, invoiceNumber: str
 const daysFromNow = (n: number) => new Date(Date.now() + n * 86_400_000);
 
 async function main() {
+  // The seed is destructive, and it now points at a database three other
+  // people are writing to. Refuse to wipe work that is not ours unless the
+  // caller says so explicitly — losing Track 2's scored bids at hour six is a
+  // much worse outcome than an extra environment variable.
+  // The seed's own settled deal (#2) legitimately carries a ranked bid and a
+  // match, so a bare count would refuse every clean re-seed. What actually
+  // signals someone else's work is scoring or matching on a *live* auction —
+  // the seed leaves every AUCTION_LIVE bid unscored and unmatched.
+  const [scoredLiveBids, liveMatches, derivedUtility] = await Promise.all([
+    prisma.bid.count({
+      where: {
+        opportunity: { status: "AUCTION_LIVE" },
+        OR: [{ rank: { not: null } }, { utilityScore: { not: null } }],
+      },
+    }),
+    prisma.match.count({ where: { opportunity: { status: "AUCTION_LIVE" } } }),
+    prisma.financingOpportunity.count({
+      where: { status: "AUCTION_LIVE", sufficiencyFloor: { not: null } },
+    }),
+  ]);
+  const existingWork = scoredLiveBids + liveMatches + derivedUtility;
+
+  if (existingWork > 0 && process.env.SEED_FORCE !== "1") {
+    console.error(
+      `\nRefusing to seed: the database already holds ${existingWork} scored bid(s) or match(es) ` +
+        `that this script would delete.\n\n` +
+        `If you genuinely want to reset the shared database, re-run with:\n` +
+        `  SEED_FORCE=1 npx tsx prisma/seed.ts\n\n` +
+        `If you only wanted your own copy, point DATABASE_URL and DIRECT_URL at a local\n` +
+        `Postgres first — see prisma/README.md.\n`,
+    );
+    process.exit(1);
+  }
+
   console.log("Resetting marketplace tables…");
   // Order matters: children before parents.
   await prisma.posting.deleteMany();
@@ -70,6 +104,8 @@ async function main() {
   await prisma.invoice.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.capitalProvider.deleteMany();
+  await prisma.verificationDocument.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.account.deleteMany();
   await prisma.organization.deleteMany();
 
@@ -226,6 +262,53 @@ async function main() {
     buyers[b.slug] = { id: c.id, taxId: b.taxId };
   }
 
+  // ---------------------------------------------------------- sign-in allowlist
+  //
+  // Supabase Auth owns the credential; these rows own the mapping from a
+  // verified Google identity to an Organization (#25). `supabaseUserId` stays
+  // null until the person first signs in — the callback matches on email, then
+  // stamps the Supabase UUID so later sessions match on that instead.
+  //
+  // An allowlist rather than self-registration: you do not get to self-declare
+  // as a bank on a capital marketplace. Replace these with real team addresses
+  // before demoing OAuth, or nobody can get in.
+
+  const allowlist: { email: string; displayName: string; org: string; role: "OWNER" | "MEMBER" }[] = [
+    // The four of us. Email is globally unique, so one address maps to exactly
+    // one org — spread across party types so the team collectively covers
+    // supplier, provider and platform views. To demo the other side, change the
+    // `org` here and reseed rather than editing the row by hand: a reseed would
+    // otherwise wipe the edit.
+    { email: "ragav6032022@gmail.com", displayName: "Ragav Hariharan", org: PLATFORM_SLUG, role: "OWNER" },
+    { email: "justaweebwithinternet@gmail.com", displayName: "Harsha Sakamuri", org: SUPPLIER, role: "OWNER" },
+    { email: "yuvaraj28022005@gmail.com", displayName: "Yuvaraj", org: "meridian-bank", role: "OWNER" },
+    { email: "tharoonsays@gmail.com", displayName: "Tharun", org: "rapidfin", role: "OWNER" },
+
+    // Placeholders so every seeded org has an owner. Nobody can sign in as
+    // these — no Google account owns an @example address, which is the point.
+    { email: "finance@kalingaprecision.example", displayName: "Kalinga Precision — Finance", org: SUPPLIER2, role: "OWNER" },
+    { email: "desk@kavericapital.example", displayName: "Kaveri Capital — Desk", org: "kaveri-capital", role: "OWNER" },
+    { email: "desk@ashwincredit.example", displayName: "Ashwin Credit Fund — Desk", org: "ashwin-credit-fund", role: "OWNER" },
+  ];
+
+  const orgIdBySlug: Record<string, string> = {
+    [SUPPLIER]: supplier.id,
+    [SUPPLIER2]: distressed.id,
+    [PLATFORM_SLUG]: platform.id,
+    ...Object.fromEntries(providerSeeds.map((p) => [p.slug, providers[p.slug].orgId])),
+  };
+
+  for (const u of allowlist) {
+    await prisma.user.create({
+      data: {
+        email: u.email,
+        displayName: u.displayName,
+        role: u.role,
+        orgId: orgIdBySlug[u.org],
+      },
+    });
+  }
+
   // ------------------------------------------------- supplier cash positions
   //
   // Raw, dated facts. Nothing here is a pre-computed urgency number: Track 2's
@@ -243,12 +326,16 @@ async function main() {
       cashThresholdPaise: 100_000 * PAISE,
       obligations: {
         create: [
-          { label: "September payroll", amountPaise: 900_000 * PAISE, dueDate: daysFromNow(2) },
+          // Thursday: the steel invoice draws Vertex down to exactly its buffer.
+          // Dated a day before payroll rather than alongside it so the order is
+          // fixed by date, not by whether a sort happens to be stable.
           {
             label: "Kalyani Steel — billet delivery",
             amountPaise: 46_072_836,
-            dueDate: daysFromNow(2),
+            dueDate: daysFromNow(1),
           },
+          // Friday: payroll then leaves them 9,00,000 short of the buffer.
+          { label: "September payroll", amountPaise: 900_000 * PAISE, dueDate: daysFromNow(2) },
           // Outside the window: should not drive the floor.
           { label: "GST remittance — Q2", amountPaise: 180_000 * PAISE, dueDate: daysFromNow(12) },
         ],
@@ -649,19 +736,18 @@ async function main() {
       where: { id: positionId },
       include: { obligations: { orderBy: { dueDate: "asc" } } },
     });
-    const byDay = new Map<string, { total: number; labels: string[] }>();
-    for (const o of position.obligations) {
-      const key = o.dueDate.toISOString().slice(0, 10);
-      const e = byDay.get(key) ?? { total: 0, labels: [] };
-      e.total += o.amountPaise;
-      e.labels.push(o.label);
-      byDay.set(key, e);
-    }
+    // One obligation at a time, stopping at the first breach — the same
+    // semantics as deriveSupplierUtility(), so this check and the production
+    // derivation cannot report different floors.
     let cash = position.currentCashPaise;
-    for (const [day, { total, labels }] of [...byDay.entries()].sort()) {
-      cash -= total;
+    for (const o of position.obligations) {
+      cash -= o.amountPaise;
       if (cash < position.cashThresholdPaise) {
-        return { floorPaise: position.cashThresholdPaise - cash, deadline: day, driving: labels.join(" + ") };
+        return {
+          floorPaise: position.cashThresholdPaise - cash,
+          deadline: o.dueDate.toISOString().slice(0, 10),
+          driving: o.label,
+        };
       }
     }
     return null;
@@ -701,6 +787,7 @@ Seed complete.
   invoices          ${await prisma.invoice.count()}
   opportunities     ${await prisma.financingOpportunity.count()}
   bids              ${await prisma.bid.count()}
+  users             ${await prisma.user.count()}
   cash positions    ${await prisma.supplierCashPosition.count()}
   cash obligations  ${await prisma.cashObligation.count()}
   accounts          ${await prisma.account.count()}

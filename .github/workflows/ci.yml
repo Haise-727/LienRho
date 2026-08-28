@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  verify:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # postinstall runs `prisma generate`. Without the generated client every
+      # database-touching module fails to resolve and the typecheck reports
+      # cascading implicit-any errors that have nothing to do with the code.
+      - name: Install
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # The worked example from docs/01-commerce-analysis.md §3 is in here. If
+      # this fails, the pitch is wrong regardless of how the UI looks.
+      - name: Test
+        run: npm test
+
+      # No DATABASE_URL on purpose: every route is force-dynamic, so a green
+      # build proves nothing reaches the database at build time.
+      - name: Build
+        run: npm run build
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # Advisory rather than blocking: a transitive dev-only advisory should not
+      # stop a merge, but it should be visible in the run.
+      - name: npm audit (high and above)
+        run: npm audit --audit-level=high || true
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # .env is gitignored; this fails the build if one is ever committed, and
+      # catches a pasted Postgres URL with credentials in it.
+      - name: Fail if a .env file or a credentialed Postgres URL is tracked
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production)$'; then
+            echo "::error::A .env file is tracked. Remove it and rotate the credentials."
+            exit 1
+          fi
+          if git grep -nEI 'postgres(ql)?://[^:/@ ]+:[^@ ]+@' -- . ':(exclude).github/workflows/*' > /tmp/hits 2>/dev/null; then
+            if grep -vE '<password>|REPLACE_ME|\$\{|YOUR-PASSWORD|lienrho:lienrho' /tmp/hits; then
+              echo "::error::A database URL with an embedded password is committed."
+              exit 1
+            fi
+          fi
+          echo "No tracked .env files and no credentialed connection strings."
