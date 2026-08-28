@@ -3,7 +3,7 @@
 **An agentic capital marketplace for supply-chain working capital.**
 CSI ORIGIN 2026 · Problem Statement 5
 
-[![CI](https://github.com/Haise-727/LienRho/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Haise-727/LienRho/actions/workflows/ci.yml)
+[![CI](https://github.com/Haise-727/LienRho/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Haise-727/LienRho/actions/workflows/ci.yml?query=branch%3Amain)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![Prisma](https://img.shields.io/badge/Prisma-7-2D3748)
 ![Postgres](https://img.shields.io/badge/PostgreSQL-16-336791)
