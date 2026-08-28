@@ -117,3 +117,24 @@ export function verificationCallScript(input: {
     },
   ];
 }
+
+/**
+ * Make text safe to read aloud.
+ *
+ * Gate reasons come from the clearing engine and contain "₹" and digit
+ * grouping meant for the eye. Text-to-speech renders the symbol
+ * inconsistently — sometimes silence, sometimes the literal word — so it is
+ * replaced rather than left to chance. Applied at the /api/voice/speak choke
+ * point so every surface gets it, including text this module did not write.
+ */
+export function forSpeech(text: string): string {
+  return text
+    // "₹9,00,000.00" -> "9,00,000.00 rupees" — the unit reads better after
+    // the number when spoken, which is the opposite of how it is written.
+    .replace(/₹\s*([\d,]+(?:\.\d+)?)/g, "$1 rupees")
+    .replace(/₹/g, " rupees ")
+    // A trailing ".00" is noise out loud.
+    .replace(/(\d)\.00\b/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}

@@ -7,9 +7,11 @@ import { ElevenLabsVoiceCockpit } from "./ElevenLabsVoiceCockpit";
 interface VoiceAgentWidgetProps {
   dealContext?: string;
   className?: string;
+  /** Scopes the assistant's answers to this auction. */
+  opportunityId?: string;
 }
 
-export function VoiceAgentWidget({ dealContext, className = "" }: VoiceAgentWidgetProps) {
+export function VoiceAgentWidget({ dealContext, className = "", opportunityId }: VoiceAgentWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -31,6 +33,7 @@ export function VoiceAgentWidget({ dealContext, className = "" }: VoiceAgentWidg
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         dealContext={dealContext}
+        opportunityId={opportunityId}
       />
     </>
   );

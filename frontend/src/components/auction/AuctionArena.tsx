@@ -78,7 +78,10 @@ export function AuctionArena({
         </Link>
 
         {/* Floating / Top Pill Voice Widget */}
-        <VoiceAgentWidget dealContext={`Invoice ${invoiceId} · Cleared for ${winningOffer?.providerName || 'Rapidfin'}`} />
+        <VoiceAgentWidget
+          opportunityId={opportunityId}
+          dealContext={`Invoice ${invoiceId} · Cleared for ${winningOffer?.providerName || 'Rapidfin'}`}
+        />
       </div>
 
       {/* Arena Title */}

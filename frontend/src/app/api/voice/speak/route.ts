@@ -9,13 +9,21 @@
 // not configured" instead of appearing broken.
 
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { forSpeech } from "@/lib/voice/script";
 
 export const dynamic = "force-dynamic";
 // Node runtime, not edge: the SDK streams and needs Buffer.
 export const runtime = "nodejs";
 
-/** Rachel — a clear, neutral default. Override per request or via env. */
-const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+/**
+ * Matilda — professional register, and importantly a *premade* voice.
+ *
+ * Not Rachel (21m00Tcm4TlvDq8ikWAM), which is the obvious default and fails on
+ * a free account with 402 `paid_plan_required`: "free users cannot use library
+ * voices via the API". Premade voices attached to the account work; library
+ * voices need a paid plan. Verified against this project's key.
+ */
+const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "XrExE9yKIg1WjnnlVkGX";
 
 /**
  * Flash rather than multilingual: this is short, English, and read aloud while
@@ -62,7 +70,9 @@ export async function POST(request: Request) {
   try {
     const client = new ElevenLabsClient({ apiKey });
     const stream = await client.textToSpeech.convert(voiceId, {
-      text,
+      // Normalise here rather than at each caller, so text written elsewhere
+      // — gate reasons from the clearing engine, for instance — is also safe.
+      text: forSpeech(text),
       modelId: MODEL_ID,
       outputFormat: "mp3_44100_128",
     });
