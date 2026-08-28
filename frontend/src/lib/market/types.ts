@@ -44,6 +44,11 @@ export type IsoDate = string;
  *
  * Integer bps for the same reason as Paise: `0.1105` is not exactly representable
  * and percentages get compared for ranking.
+ *
+ * One exception: DERIVED comparators (notably `ScoredOffer.effectiveCostBps`)
+ * keep their fractional part. Rounding those to whole bps before ranking would
+ * let two genuinely different offers tie at 1bp granularity and be ordered
+ * arbitrarily. Round for display, never before comparing.
  */
 export type Bps = number;
 
