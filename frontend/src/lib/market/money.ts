@@ -107,3 +107,40 @@ export function daysBetween(from: IsoDate, to: IsoDate): number {
 export function isOnOrBefore(date: IsoDate, deadline: IsoDate): boolean {
   return daysBetween(date, deadline) >= 0;
 }
+
+/** Saturday or Sunday. Bank holidays are not modelled — see addBusinessDays. */
+export function isWeekend(date: IsoDate): boolean {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return day === 0 || day === 6;
+}
+
+/**
+ * Add N business days, skipping weekends.
+ *
+ * Settlement is quoted in business days (T+0 / T+1 / T+3), and the distinction
+ * from calendar days is not cosmetic: T+3 business days from a Friday lands on
+ * Wednesday, not Monday. That is a four-day difference on the exact axis the
+ * timing gate tests, so using calendar days here would let offers clear a
+ * Friday deadline that in reality miss it — and "this offer arrives too late"
+ * is the demo's whole point.
+ *
+ * T+0 means same day, so zero advances nothing — but a T+0 quote issued on a
+ * Saturday still cannot land until Monday, hence the roll-forward before the
+ * loop.
+ *
+ * Bank holidays are deliberately not modelled: a holiday calendar is real work,
+ * it varies by state in India, and being wrong about weekends is the error that
+ * actually moves a result. Worth stating out loud rather than implying a
+ * precision the code doesn't have.
+ */
+export function addBusinessDays(date: IsoDate, businessDays: number): IsoDate {
+  let cursor = date;
+  while (isWeekend(cursor)) cursor = addDays(cursor, 1);
+
+  let remaining = businessDays;
+  while (remaining > 0) {
+    cursor = addDays(cursor, 1);
+    if (!isWeekend(cursor)) remaining -= 1;
+  }
+  return cursor;
+}

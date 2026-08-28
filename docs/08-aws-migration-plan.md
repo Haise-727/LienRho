@@ -23,6 +23,10 @@ To satisfy the enterprise infrastructure requirements of CSI ORIGIN 2026 Problem
    - Change the `DATABASE_URL` in the production environment variables to point to the Aurora cluster endpoint.
    - Run `npx prisma migrate deploy` in your CI/CD pipeline to build the tables on Aurora.
    - *Note: Do not use `db push` in production; use proper Prisma migrations.*
+   - **Ready:** `frontend/prisma/migrations/0_init` is the baseline migration,
+     and Supabase is marked as having it applied. `migrate deploy` has been
+     verified against an empty database — it creates all 13 tables, and the
+     seed then runs clean and balanced. No baselining work is left for cutover.
 
 ## Phase 2: Caching & Locks (Local Docker → ElastiCache)
 **Owner:** Track 2 Developer
