@@ -17,7 +17,14 @@ inside the old repo would itself be a trace.
 | [`02-carryover-audit.md`](02-carryover-audit.md) | What survives from the old build, what dies, what's genuinely new |
 | [`03-system-design.md`](03-system-design.md) | Proposed architecture, modules, agents, data model |
 | [`04-build-plan.md`](04-build-plan.md) | Scope, phases, demo-able checkpoints, demo narrative |
-| [`05-decisions-needed.md`](05-decisions-needed.md) | Open questions only the team can settle |
+| [`05-decisions-needed.md`](05-decisions-needed.md) | Open questions only the team can settle — AWS/infra and sponsor integrations are **on hold**, see decisions below |
+| [`06-implementation-plan.md`](06-implementation-plan.md) | **Start here for actual work.** What's transferred and verified working, what to remove/rework, and the 4-way split for phase 1 |
+
+## Decisions made so far
+
+- **Infra:** deferred. Local/deterministic (FastAPI + Postgres + Docker Compose) until the core marketplace logic works — no AWS commitment yet.
+- **Sponsor integrations** (ElevenLabs voice, CodeCrafters Rust/Go engine, NexusX): deferred until phases 0–3 of `04-build-plan.md` are solid.
+- **Name:** staying **LienRho** — no rename across docs needed.
 
 ## Naming
 

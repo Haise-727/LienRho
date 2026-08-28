@@ -1,0 +1,125 @@
+================================================================================
+SYSTEM ARCHITECTURE & WORKFLOW SPECIFICATION BRIEF
+PROJECT: Competitive Supply-Chain Working Capital Marketplace
+================================================================================
+
+1. SYSTEM OVERVIEW & CORE ANALOGY
+--------------------------------------------------------------------------------
+This system acts as an autonomous multi-attribute clearinghouse (similar to a 
+Cloud Compute Spot-Instance Auction Engine or Uber Surge Matching system) for 
+supply-chain invoices. 
+
+Rather than functioning as a passive comparison rate site (like a loan aggregator), 
+the system continuously matches three core market actors:
+  - Sellers (Suppliers/Vendors): Entities with unpaid invoices seeking rapid liquidity 
+    (e.g., within 2-4 hours to meet payroll) who trade off interest rates for speed/advance rates.
+  - Buyers (Enterprise Clients): Corporations holding 30/60/90-day payment terms who 
+    require payment verification and single-payee settlement guarantees.
+  - Credit Owners (Banks/NBFCs/Private Funds): Institutional liquidity pools seeking 
+    yield subject to rigid portfolio constraints (e.g., max $5M per sector, minimum credit score).
+
+The platform coordinates an end-to-end autonomous loop:
+Invoice Upload -> 3-Way Verification -> Risk Pricing -> Bidding Auction -> Multi-Attribute Matching -> Disbursal -> Escrow Settlement -> Adaptive Learning.
+
+--------------------------------------------------------------------------------
+2. TECHNICAL ARCHITECTURE & AWS CLOUD FOOTPRINT
+--------------------------------------------------------------------------------
+Deployment Strategy: Serverless & Containerized AWS Infrastructure prioritizing sub-second matching, high concurrency, and non-blocking background workers.
+
+Architecture Stack:
+  - Edge/Routing: AWS Route 53 + CloudFront CDN.
+  - Application Layer: AWS ECS Fargate hosting containerized Next.js (App Router) & Node.js backend services.
+  - Asynchronous Execution: Amazon SQS (Message Queuing) triggering AWS Lambda functions for background tasks (OCR processing, verification webhooks, and AI voice calls).
+  - Database & Caching:
+      * Primary: Amazon Aurora Serverless v2 (PostgreSQL) enforcing ACID transactions for invoices, bids, and audit trails.
+      * In-Memory Cache: Amazon ElastiCache (Redis) handling distributed locking (SETNX) to prevent race conditions during concurrent bid lockouts.
+  - Encrypted Storage: Amazon S3 (KMS Encrypted) for storing PDF invoices, signed delivery notes, and ElevenLabs verification audio logs.
+  - Security & Secrets: AWS Secrets Manager storing API keys for ElevenLabs, Nexus AI, and external webhooks.
+
+--------------------------------------------------------------------------------
+3. ACTOR WORKFLOWS & SCENARIO MATRIX
+--------------------------------------------------------------------------------
+[ACTOR 1: SELLER (SUPPLIER)]
+  - Goal: Liquidate pending invoices for immediate cash flow.
+  - UI Input: Drag-and-drop e-Invoice PDF or automated ERP connection (QuickBooks/SAP sync).
+  - Key Parameter: Urgency vs. Cost Slider (defines weights for the matching engine).
+  - Scenario Handling:
+      * Urgent Payroll (Speed-Prioritized): Accepts an 88% advance rate + 14% APR if disbursed within 2 hours.
+      * Planned Liquidity (Cost-Prioritized): Prefers a 75% advance rate + 9.5% APR even if settlement takes 48 hours.
+      * Partial Financing: Can choose to list $40,000 of a $100,000 invoice.
+
+[ACTOR 2: BUYER (ENTERPRISE)]
+  - Goal: Maintain existing 90-day accounts payable terms without vendor cash distress.
+  - UI Input: Automated ERP webhook acknowledging delivery and debt obligation.
+  - Scenario Handling:
+      * 3-Way Match Verification: Invoice payload matched against Purchase Order (PO) and Proof of Delivery (PoD).
+      * Direct Settlement Redirection: Payment routed to platform Escrow on day 90 rather than paying the seller directly.
+      * Dispute / Partial Acceptance: If 15% of delivered goods are damaged, the buyer flags the invoice, automatically reducing the eligible financing base to 85%.
+
+[ACTOR 3: CREDIT OWNER (BANK / INSTITUTIONAL LENDER)]
+  - Goal: Maximize yield on idle capital while enforcing risk boundaries.
+  - UI Input: Rule-based JSON profile configuration defining:
+      * Liquidity Budget ($ pool limits)
+      * Sector Caps (e.g., max 20% total exposure to automotive)
+      * Credit Floor & Required Yield (Minimum APR threshold)
+  - Scenario Handling:
+      * Concurrency Lock: When bidding on an invoice, Redis temporarily locks capital from the lender's available pool to prevent double-allocation across parallel auctions.
+      * Automated Bidding: Lenders run autonomous bidding agents that evaluate invoice metadata and formulate competitive proposals instantly.
+
+--------------------------------------------------------------------------------
+4. VERIFICATION & SECURITY ENGINE
+--------------------------------------------------------------------------------
+To eliminate fraud, double-financing, and buyer defaults, the platform executes a 4-Layer Verification Protocol before any auction begins:
+  1. Identity / Tax KYC: Verifies Seller/Buyer GSTIN, PAN, and corporate registry records via API mocks.
+  2. Hash Deduplication: Computes SHA-256 hash of (Seller_Tax_ID + Buyer_Tax_ID + Invoice_Number). If hash exists in Aurora Postgres, block request immediately (anti-double financing).
+  3. Digital PoD Verification: Automated cross-reference of shipping manifests and warehouse receipt signatures.
+  4. Outbound ElevenLabs Voice Verification: High-value invoices (> $25,000) trigger an automated phone verification check to the buyer's procurement officer.
+
+--------------------------------------------------------------------------------
+5. MATCHING & SCORING ENGINE (NON-LINEAR MULTI-ATTRIBUTE UTILITY)
+--------------------------------------------------------------------------------
+The matching engine evaluates bids using non-linear Pareto utility scoring rather than simple APR sorting.
+
+Utility Formula Model:
+  Utility(Bid) = w1 * U(AdvanceRate) + w2 * U(APR) + w3 * U(DisbursalSpeed) - w4 * U(ProcessingFees)
+
+Where:
+  - Weights (w1, w2, w3, w4) are dynamically generated based on the Seller's UI "Urgency Slider" setting.
+  - Disbursal Speed utility decays exponentially with time (a 2-hour delay drastically lowers utility for high-urgency tasks).
+  - APR utility scales inversely with cost.
+
+Auction Mechanism:
+  - Modified Vickrey / Sealed-Bid Second-Price model adapted for multi-attribute scoring to prevent bid-sniping and enforce true risk pricing.
+
+--------------------------------------------------------------------------------
+6. SPONSOR TECHNOLOGY INTEGRATIONS
+--------------------------------------------------------------------------------
+[SPONSOR 1: ELEVENLABS (VOICE & AUDIO AI)]
+  - Inbound CFO Voice Decision Cockpit: Integrated into the Next.js UI using `@elevenlabs/client` or SDK. Users can press a mic icon to ask: "Summarize my top bids for Invoice #8042." The agent executes frontend client-side tools, parses Aurora state, and speaks back top options.
+  - Outbound Fraud Verification Call Bot: Automated outbound phone call to procurement contacts for high-value invoice confirmation. Speech-to-Text (`Scribe v2`) records and transcribes the confirmation call into S3 and updates the invoice verification score.
+  - Audio Deal Summaries: Instant audio explainers generated using low-latency TTS (`Flash v2.5` / `Turbo v2.5`).
+
+[SPONSOR 2: STITCH (DATA CONNECTIVITY & STATE PIPELINES)]
+  - State Machine Architecture: Manages explicit, deterministic state transitions for every invoice:
+      RECEIVED -> VERIFIED -> AUCTION_LIVE -> MATCHED -> DISBURSED -> SETTLED -> RECOURSES_CLOSED
+  - Pipeline Reliability: Resilient Webhook ingestion pipelines handling rate-limits, exponential backoff retries, and state persistence.
+
+[SPONSOR 3: CODECRAFTERS (SYSTEMS ENGINEERING & CONCURRENCY)]
+  - Deterministic Matching Algorithm: Written from scratch without using generic LLM non-deterministic decision prompts.
+  - Concurrent Lock Controller: Implements Redis Mutex locking algorithms to handle edge cases where multiple invoice auctions attempt to draw down the same lender's capital pool simultaneously.
+
+[SPONSOR 4: NEXUS AI / NEXUSX (MULTI-AGENT AGGREGATION & GATEWAY)]
+  - Agentic Gateway Protocol: Routes multi-agent reasoning tasks dynamically:
+      * Invoice OCR & Extraction -> LLM Parser
+      * Portfolio Constraint Verification -> Logic Engine
+      * Multi-Attribute Scoring -> Deterministic Algorithmic Service
+  - Unified Metrics Dashboard: Tracks per-request token usage, latency metrics, and API call costs across multi-agent execution flows.
+
+--------------------------------------------------------------------------------
+7. UI/UX DESIGN POLISH & INTERACTION DETAILS
+--------------------------------------------------------------------------------
+  - Interactive "Urgency vs. Cost" Slider: Live-updates bid rankings in real-time as the user shifts preference between instant cash vs. lowest fee.
+  - Live Bid Stream: WebSocket-powered visual ticker showing lenders actively placing and adjusting bids.
+  - Plain-English Deal Breakdown Card (Ditto Style): Converts raw financial terms into clear prose (e.g., "Take home $88,000 today for $1,200 total fee. Receive remaining $10,800 when buyer pays on Day 90").
+  - Verification Badge Stepper: Visual 4-step green checkmark bar indicating KYC, Hash-Dedup, Delivery Confirmation, and Voice Audit status.
+================================================================================
