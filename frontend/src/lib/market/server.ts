@@ -157,6 +157,34 @@ export async function clearById(
   });
 }
 
+/**
+ * Display fields for one opportunity's header.
+ *
+ * Separate from `loadOpportunity` on purpose. That query is tuned for clearing
+ * and selects only what the engine consumes; widening it so a page can print a
+ * customer name would mean every clearing read drags display joins with it.
+ * Two small reads beat one query serving two masters.
+ */
+export async function loadOpportunityHeader(opportunityId: string) {
+  return prisma.financingOpportunity.findUnique({
+    where: { id: opportunityId },
+    select: {
+      id: true,
+      status: true,
+      tenorDays: true,
+      org: { select: { name: true } },
+      invoice: {
+        select: {
+          invoiceNumber: true,
+          faceValue: true,
+          verificationTier: true,
+          customer: { select: { name: true } },
+        },
+      },
+    },
+  });
+}
+
 /** One row on the market index. */
 export interface OpportunitySummary {
   id: string;
