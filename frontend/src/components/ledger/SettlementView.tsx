@@ -8,6 +8,15 @@ import { formatINR, formatPaiseToINR } from "@/lib/scoring";
 
 interface SettlementViewProps {
   invoiceId: string;
+  /**
+   * The opportunity whose ledger to show.
+   *
+   * Was hardcoded to "opp-seed-001", so every invoice's settlement screen
+   * rendered the same journal. That is the worst place in the product for a
+   * placeholder: this view IS the audit trail, and two invoices showing
+   * identical postings discredits the trail even though the ledger is correct.
+   */
+  opportunityId?: string;
   invoiceNumber?: string;
   buyerName?: string;
   providerName?: string;
@@ -16,6 +25,7 @@ interface SettlementViewProps {
 }
 
 export function SettlementView({
+  opportunityId,
   invoiceId,
   invoiceNumber = "INV-2026-0801",
   buyerName = "Bharat Auto Ltd",
@@ -189,7 +199,7 @@ export function SettlementView({
       <DoubleEntryTable
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        opportunityId="opp-seed-001"
+        opportunityId={opportunityId}
       />
     </div>
   );
