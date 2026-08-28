@@ -1,76 +1,85 @@
-# LienRho — AWS Production Infrastructure (Issue #34)
+# LienRho — Deployment Plan (Supabase + AWS Amplify Gen 2)
 
-> Implementation plan + status for deploying LienRho to AWS.
-> Spec: `docs/aws_migration_plan.md` · Ticket: [#34](https://github.com/Haise-727/LienRho/issues/34)
-> **Decision:** We are **ditching Supabase** entirely, so #34 (Fargate + Aurora) is the
-> correct target. #30 (Amplify + Supabase) is invalid — it depends on Supabase Pooler + auth.
+> Simplified architecture after switching from #34 (Fargate/Aurora) to Supabase + Amplify.
+> Ticket: [#30](https://github.com/Haise-727/LienRho/issues/30) | Supabase is kept as DB + auth.
 
 ## Architecture
 
 ```mermaid
-flowchart TB
-    U["User / Browser"] -->|"HTTP 80"| ALB["Application Load Balancer\n(public subnet)"]
-
-    subgraph VPC["VPC (10.0.0.0/16)"]
-        ALB --> FARGATE["ECS Fargate\nNext.js standalone :3000\n(private subnet, NAT egress)"]
-
-        subgraph PRIV["Private Subnets"]
-            AURORA["Aurora Serverless v2\nPostgreSQL :5432\nStitch Ledger"]
-            REDIS["ElastiCache Redis\n:6379\nSETNX locks"]
-            SEC["Secrets Manager\nDATABASE_URL / REDIS_URL /\nAPI keys"]
-        end
-
-        FARGATE -->|"5432 (SG-scoped)"| AURORA
-        FARGATE -->|"6379 (SG-scoped)"| REDIS
-        FARGATE -->|"reads at boot"| SEC
-    end
-
-    ECR["ECR: lienrho-web"] -.->|"image pull"| FARGATE
-    NAT["NAT Gateway"] -->|"egress"| IGW["Internet (ECR, Secrets)"]
-```
-
-Security: Aurora + ElastiCache are private; only the Fargate SG can reach them.
-Fargate has no public IP — it egresses via a single NAT Gateway.
-
-## Files (this branch)
-
-| Path | What |
-|---|---|
-| `infra/versions.tf` | OpenTofu + AWS provider (~> 5.83) config |
-| `infra/variables.tf` | Region, CIDRs, DB name, API-key vars |
-| `infra/vpc.tf` | VPC, 2 AZs, public/private subnets, IGW, NAT, route tables |
-| `infra/ecr.tf` | ECR repo `lienrho-web` + lifecycle policy |
-| `infra/aurora.tf` | Aurora Serverless v2 cluster + `db.serverless` instance |
-| `infra/elasticache.tf` | Redis OSS `cache.t4g.micro` |
-| `infra/iam.tf` | ECS execution + task IAM roles |
-| `infra/secrets.tf` | Secrets Manager secret (DB/Redis/API URLs) |
-| `infra/ecs.tf` | ECS cluster, ALB, target group, Fargate service, task defs (web + migrate) |
-| `infra/outputs.tf` | ALB DNS, ECR URL, endpoints |
-| `Dockerfile` | Multi-stage build of `frontend/` as Next.js standalone |
-| `frontend/next.config.ts` | `output: "standalone"` enabled |
-| `.github/workflows/deploy.yml` | Build → ECR → `prisma migrate deploy` (in-VPC) → Fargate redeploy |
-
-## How it deploys (CI/CD)
-
-```mermaid
 flowchart LR
-    A["push to main"] --> B["docker build (standalone)"]
-    B --> C["push to ECR"]
-    C --> D["ecs run-task: prisma migrate deploy\n(inside VPC → reaches Aurora)"]
-    D --> E["ecs update-service --force-new-deployment"]
-    E --> F["live via ALB DNS"]
+    U["User / Browser"] -->|HTTPS| AMP["AWS Amplify Gen 2\n(Next.js SSR + API routes)"]
+    AMP -->|pooler :6543| SUPA["Supabase\nPostgreSQL"]
+    AMP -->|REST| LLM["NVIDIA LiteLLM / ElevenLabs APIs"]
+    AMP -->|HTTP| UP["Upstash Redis\n(serverless, free)"]
 ```
 
-Migrations run as a **one-shot Fargate task inside the VPC** so the private
-Aurora is reachable — no need to expose the DB to the internet.
+**Why this instead of #34:** Amplify is dramatically simpler — no VPC, no Terraform, no ECS, no Aurora, no ElastiCache. Connects GitHub, auto-detects Next.js, builds & deploys on every push. Existing Supabase Auth (#25) stays intact.
+
+## What we removed
+| Old (#34) | New |
+|---|---|
+| `infra/` — 12 OpenTofu files | Deleted (orphaned resources already cleaned from AWS) |
+| `Dockerfile` (Next.js standalone) | Deleted (Amplify handles build) |
+| `frontend/next.config.ts` → `output:"standalone"` | Reverted (Amplify uses default Next.js output) |
+| `.github/workflows/deploy.yml` (ECR+ECS) | Deleted (Amplify deploys on `git push`) |
+| Aurora Serverless v2 | Supabase (unchanged) |
+| ElastiCache Redis | Upstash Redis (serverless, 1 env var) |
+| ALB + ECS Fargate | AWS Amplify Gen 2 (managed SSR) |
+| NAT Gateway + VPC | Nothing — network managed by Amplify |
+
+## What you need to do (one-time console setup)
+
+### 1. AWS Amplify Console
+1. Go to **AWS Amplify** → **Create new app** → **Host web app** → **GitHub**
+2. Connect `Haise-727/LienRho`, select `main` branch
+3. Amplify auto-detects `amplify.yml` at repo root → it's already there
+
+### 2. Environment variables (set in Amplify console)
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | `postgresql://...@aws-0-<pooler>.supabase.co:6543/lienrho?pgbouncer=true` |
+| `DIRECT_URL` | `postgresql://...@aws-0-<db>.supabase.co:5432/lienrho` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `NVIDIA_LITELLM_API_KEY` | Team key |
+| `ELEVENLABS_API_KEY` | Team key |
+| `UPSTASH_REDIS_URL` | `rediss://...` (from upstash.com → free tier) |
+
+### 3. Upstash Redis
+1. Go to **upstash.com** → sign up (free tier)
+2. Create a Redis DB → copy the `UPSTASH_REDIS_URL`
+3. Paste into Amplify env vars
+
+## CI/CD flow
+```
+git push main
+  → Amplify detects push
+  → runs amplify.yml: npm ci → prisma generate → prisma migrate deploy → npm run build
+  → deploys to https://main.xxxx.amplifyapp.com (auto-generated)
+```
+
+The existing `.github/workflows/ci.yml` still gates PR merges (lint, tsc, test, build). No manual `deploy.yml` needed.
+
+## Files in this branch
+| Path | Purpose |
+|---|---|
+| `amplify.yml` | Amplify build spec (install, generate, migrate, build) |
+| `docs/aws-architecture.md` | This file |
+| `frontend/next.config.ts` | Reverted to default (no standalone) |
+
+## Migration (from local dev)
+If you're running against **Supabase** locally:
+1. Ensure your `.env` uses production Supabase URLs
+2. `npx prisma migrate deploy` points `DIRECT_URL` to Supabase port 5432
+3. First Amplify build runs this automatically
+
+If you need seed data on the production Supabase: run `npx tsx prisma/seed.ts` once with production `DATABASE_URL` set.
 
 ## Status
-- [x] OpenTofu config written and `tofu validate` passes (40 resources planned).
-- [ ] `tofu apply` (provisions real AWS — see cost note).
-- [ ] `tofu output` → wire ALB DNS / secrets into GitHub repo secrets.
-- [ ] Auth replacement for Supabase (Cognito recommended) — separate task.
-
-## Cost note (hackathon)
-NAT Gateway (~$32/mo) + Aurora Serverless v2 (scales to 0.5 ACU) + ElastiCache
-t4g.micro + Fargate + ALB. Expect a few $/day while running; `tofu destroy`
-after the demo to stop billing.
+- [x] AWS orphans cleaned (VPC, ALB, ElastiCache, ECR, NAT, IGW — all deleted)
+- [x] Old IaC files removed (infra/, Dockerfile, deploy.yml)
+- [x] `amplify.yml` created at repo root
+- [ ] Connect repo to AWS Amplify console 
+- [ ] Set env vars in Amplify
+- [ ] Set up Upstash Redis
+- [ ] First deploy — verify public URL
