@@ -14,20 +14,17 @@ already uses the name directly rather than a placeholder.
 
 ## 2. Infrastructure (AWS) — ✅ Decided
 
-**Decision:** Next.js Full-Stack, Prisma ORM, Redis. Deployment targets AWS ECS Fargate, Aurora Serverless v2, ElastiCache Redis, S3.
-+ Docker Compose, the same posture as the transferred base — until the core
-marketplace logic (phases 0–3 of `04-build-plan.md`) actually works. AWS
-service selection is real, non-trivial work (ECS vs. Lambda, RDS vs. Aurora
-Serverless, Bedrock vs. direct API routing) and none of it proves the thesis
-in `01-commerce-analysis.md`. Revisit only if the core build is solid with time
-still on the clock.
+**Decision:** Next.js full-stack, Prisma ORM, Redis. The Python FastAPI +
+SQLAlchemy base is retired; all API surface moves into Next.js route handlers.
 
-*If revisited, a candidate stack was proposed* (Route 53 + CloudFront,
-ECS Fargate for the app layer, SQS→Lambda for async ingestion/verification
-work, Aurora Serverless v2 Postgres, ElastiCache Redis for allocation locking,
-S3+KMS for documents, Secrets Manager) — reasonable shape *if* cloud deployment
-becomes a real goal, but treat "reasonable shape" and "worth building this
-week" as separate questions.
+**Deployment target** (aspirational, not built during the sprint): Route 53 +
+CloudFront, ECS Fargate for the app layer, Aurora Serverless v2 Postgres,
+ElastiCache Redis for allocation locking, S3+KMS for documents, Secrets Manager.
+
+Worth keeping separate: choosing this shape is not the same as building it.
+Nothing in the AWS service selection proves the thesis in
+`01-commerce-analysis.md`, so it stays behind a working local stack. Local
+development runs Postgres and Redis under Docker Compose.
 
 ---
 
@@ -51,49 +48,44 @@ week" as separate questions.
 
 ### NexusX
 - **Autonomous multi-agent coordination** (Supplier, Lender, Market Clearing)
-phases 0–3 are solid. Recorded here with the sharper versions of each idea so
-that if/when this is revisited, the team isn't starting from "what could we
-even build":
 
-### ElevenLabs (Voice / Audio)
-- **Outbound verification call:** ring the buyer's procurement contact to
-  confirm a supplier-asserted invoice, upgrading its verification tier. Speech-
-  to-text transcript stored against the invoice as evidence.
-- **Inbound decision cockpit:** a mic-driven query surface — "summarize my top
-  bids for invoice #8042" — reading from already-computed scored offers. Note
-  this is a *voice UI over existing data*, not a new decision-making capability;
-  it doesn't reduce how much of phases 0–3 has to exist first.
-- **Audio deal summaries:** TTS explainer of a scored offer, complementary to
-  the plain-English breakdown already planned for the frontend.
-- *Open:* which of these three, if any, given the time cost of each.
+---
 
-### Stitch — ⚠️ product identity unconfirmed
-Two different, incompatible guesses have been made about what Stitch's product
-actually is: cloud accounting-system connectivity (original guess) vs. a
-data-pipeline / deterministic-state-transition tool (a later guess). **Neither
-has been verified against Stitch's actual sponsor materials.** Don't design
-an integration point until someone reads what Stitch actually offers — a
-wrong guess here wastes real build time on plumbing for the wrong API shape.
-Tally ingestion itself doesn't depend on this either way: the existing
-`AccountingConnector` + Tally XML parser (kept from the old build) already
-covers reading real ledger data, independent of whichever cloud connectivity
-tool Stitch turns out to be.
+### Detail and still-open questions per sponsor
 
-### CodeCrafters
-- **Proposed use:** a from-scratch, non-LLM deterministic matching/scoring
-  engine — possibly in Rust or Go — as the systems-engineering showcase, plus
-  explicit concurrency handling (see `03-system-design.md` Module 8) for
-  concurrent allocation against the same provider's capacity.
-- *Open:* whether a second language in the stack is worth the integration
-  and demo-narration cost versus keeping the scoring engine in Python next to
-  everything else it has to read from (canonical models, risk scores).
+The decision above settles *that* each sponsor is in scope. It does not settle
+*what* each one does, and two of the four are still genuinely undefined.
 
-### NexusX
-- **Still the least defined.** Candidate roles: provider/supplier identity
-  verification, or a multi-agent routing/gateway layer (dispatching OCR
-  extraction, constraint-checking, and scoring to different backends with
-  unified cost/latency tracking).
-- *Open:* same as Stitch — confirm what NexusX's product actually does before
+**ElevenLabs.** Three candidate surfaces: an outbound verification call to the
+buyer's procurement contact (upgrading an invoice's verification tier, with the
+transcript stored as evidence); an inbound mic-driven cockpit reading from
+already-computed scored offers; a TTS explainer of a scored offer. Note the
+second and third are *voice UI over existing data*, not new decision-making
+capability — they don't reduce how much of the scoring core has to exist first.
+- *Open:* which of the three, given the time cost of each.
+
+**Stitch — ⚠️ product identity still unconfirmed.** Issue #1 asserts Stitch is a
+double-entry ledger product. That has **not** been verified against Stitch's
+actual sponsor materials, and two incompatible guesses have been made previously
+(cloud accounting-system connectivity vs. a data-pipeline / state-transition
+tool). Read what Stitch actually offers before building plumbing for it — a
+wrong guess wastes real build time on the wrong API shape.
+- *Open:* someone confirm this from the sponsor materials, not from inference.
+
+**CodeCrafters.** The deterministic matching/scoring engine, plus explicit
+concurrency handling for concurrent allocation against the same provider's
+capacity (`03-system-design.md` Module 8).
+- *Settled:* the earlier "second language, Rust or Go" question is closed — the
+  engine is TypeScript alongside the rest of the Next.js stack.
+- *Worth stating in the pitch:* the multi-attribute clearing and Pareto
+  frontier logic **is** the deterministic-algorithms showcase. The Redis lock is
+  supporting infrastructure, not the demonstration.
+
+**NexusX — still the least defined of the four.** Candidate roles: provider or
+supplier identity verification, or a multi-agent routing/gateway layer
+dispatching extraction, constraint-checking and scoring with unified
+cost/latency tracking.
+- *Open:* same as Stitch — confirm what the product actually does before
   assigning it a role in the architecture.
 
 ---

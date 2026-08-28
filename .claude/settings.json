@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source /home/haise/Coding/venvs/gmat-pred/bin/activate)",
+      "Bash(until ls *)"
+    ]
+  }
+}

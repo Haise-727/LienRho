@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lienrho-postgres
+    environment:
+      POSTGRES_USER: lienrho
+      POSTGRES_PASSWORD: lienrho
+      POSTGRES_DB: lienrho
+    ports:
+      - "5432:5432"
+    volumes:
+      - lienrho_pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: lienrho-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - lienrho_redis_data:/data
+    # Tells Redis to save the DB if at least 1 key changed in 60 seconds (useful for preserving local locks/cache between restarts)
+    command: redis-server --save 60 1 --loglevel warning
+    restart: unless-stopped
+
+volumes:
+  lienrho_pg_data:
+  lienrho_redis_data:
