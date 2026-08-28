@@ -70,3 +70,30 @@ An offline, contract-first agent skeleton. Today its "intelligence" is determini
 marketplace. The LLM and the real Track 2 engine are **optional plug-ins** switched on via env vars.
 It is validated by tests and scripts, not by an AI. See also `docs/05-track3-nexusx-summary.md` and
 `docs/06-matching-explained.md`.
+
+## D. Visualize the agents (Langfuse traces + LangGraph Studio)
+These are OPTIONAL and OFF by default. They do not affect the test suite (20 passing).
+
+### Langfuse (traces UI, open-source / self-hostable)
+1. Get a free Langfuse project (cloud langfuse.com) or run it locally:
+   docker compose up  (official Langfuse stack -> UI at http://localhost:3000)
+2. Set env (in backend/.env or your shell):
+   NEXUS_LANGFUSE_ENABLED=true
+   NEXUS_LANGFUSE_HOST=http://localhost:3000
+   NEXUS_LANGFUSE_PUBLIC_KEY=pk-...
+   NEXUS_LANGFUSE_SECRET_KEY=sk-...
+3. Run any agent (pytest or the manual script in section B). Open Langfuse -> Tracing to see
+   clearing_workflow with supplier_task -> lender_task x N -> match spans, latency, tokens.
+
+### LangGraph Studio (interactive graph UI)
+Needs a FREE LangSmith key for login ONLY. Set LANGSMITH_TRACING=false so no data leaves your machine.
+1. pip install "langgraph-cli[inmem]"
+2. From repo root create a .env with at least:
+   LANGSMITH_API_KEY=lsv2...
+   LANGSMITH_TRACING=false
+3. From repo root run: langgraph dev
+4. Open the printed Studio URL
+   (https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024)
+   and interact with the nexus_clearing graph defined in langgraph.json.
+
+See docs/08-observability.md for the full picture.
