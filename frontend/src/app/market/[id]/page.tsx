@@ -97,6 +97,20 @@ export default async function ClearingPage({
         )}
       </section>
 
+      {/* Market-health warning. Rendered above the outcome because if the bid
+          set is degenerate, the outcome is suspect regardless of how clean it
+          looks — a reader should see this before they read the winner. */}
+      {result.market.degeneracyWarning && (
+        <section className="mt-6 rounded border border-orange-400 bg-orange-50 p-4">
+          <h2 className="text-xs font-medium uppercase tracking-wide text-orange-800">
+            Suspicious offer set
+          </h2>
+          <p className="mt-1 text-sm text-orange-900">
+            {result.market.degeneracyWarning}
+          </p>
+        </section>
+      )}
+
       {/* ------------------------------------------------- the outcome */}
 
       {result.status === 'NO_ACCEPTABLE_OFFER' ? (
@@ -120,14 +134,43 @@ export default async function ClearingPage({
           <p className="text-sm text-green-900">
             funding {formatPaise(result.allocations[0].fundedPaise)}
           </p>
+
+          {/* More than one allocation means no single provider had the headroom
+              and the fill was syndicated. The supplier does not care where the
+              money came from, but the audit trail does. */}
+          {result.allocations.length > 1 && (
+            <ul className="mt-3 flex flex-col gap-1 border-t border-green-300 pt-3">
+              {result.allocations.slice(1).map((a) => (
+                <li key={a.offerId} className="text-sm text-green-900">
+                  + {a.providerName} funding {formatPaise(a.fundedPaise)}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {result.allocationNote && (
+            <p className="mt-3 text-xs text-green-800">{result.allocationNote}</p>
+          )}
+
+          {Boolean(result.shortfallPaise) && (
+            <p className="mt-1 text-xs font-medium text-amber-800">
+              {formatPaise(result.shortfallPaise!)} of the advance could not be
+              funded.
+            </p>
+          )}
         </section>
       )}
 
       {/* -------------------------------------------------- the offers */}
 
-      <h2 className="mt-10 mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+      <h2 className="mt-10 mb-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
         All offers ({scoredOffers.length})
       </h2>
+      <p className="mb-3 text-xs text-neutral-500">
+        {result.market.frontier.length} of {scoredOffers.length} sit on the
+        non-dominated frontier — the rest are beaten on cash, cost and speed at
+        once, so they are not real choices.
+      </p>
 
       <div className="flex flex-col gap-3">
         {ordered.map((offer) => (
@@ -172,6 +215,9 @@ function OfferCard({ offer }: { offer: ScoredOffer }) {
             <span className="text-neutral-500">DISQUALIFIED</span>
           ) : (
             <span className="text-neutral-500">rank {offer.rank}</span>
+          )}
+          {offer.dominatedBy && (
+            <span className="ml-2 text-neutral-400">DOMINATED</span>
           )}
         </span>
       </div>
