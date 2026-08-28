@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { VoiceVerificationModal } from "@/components/verification/VoiceVerificationModal";
 import { useParams } from "next/navigation";
 import { InvoiceHeader } from "@/components/supplier/InvoiceHeader";
 import { ObjectiveConstraintsCard } from "@/components/supplier/ObjectiveConstraintsCard";
@@ -14,21 +15,26 @@ export default function InvoiceCashForecastFocusPage() {
 
   const [opp, setOpp] = useState<Opportunity>(FALLBACK_OPPORTUNITY);
   const [loading, setLoading] = useState(true);
+  const [callOpen, setCallOpen] = useState(false);
+
+  // Lifted out of the effect so the verification call can re-run it once the
+  // tier upgrade commits — otherwise the badge on this page keeps showing the
+  // old tier until a manual reload, which reads as the upgrade having failed.
+  const loadOpp = useCallback(async () => {
+    setLoading(true);
+    const res = await fetchOpportunities();
+    const found = res.opportunities.find(
+      (o) => o.id === id || o.invoice?.id === id || o.invoice?.invoiceNumber === id
+    );
+    if (found) {
+      setOpp(found);
+    }
+    setLoading(false);
+  }, [id]);
 
   useEffect(() => {
-    async function loadOpp() {
-      setLoading(true);
-      const res = await fetchOpportunities();
-      const found = res.opportunities.find(
-        (o) => o.id === id || o.invoice?.id === id || o.invoice?.invoiceNumber === id
-      );
-      if (found) {
-        setOpp(found);
-      }
-      setLoading(false);
-    }
-    loadOpp();
-  }, [id]);
+    void loadOpp();
+  }, [loadOpp]);
 
   const invoiceNumber = opp.invoice?.invoiceNumber || "INV-2026-0801";
   const buyerName = opp.invoice?.customer?.name || "Bharat Auto Ltd";
@@ -68,7 +74,49 @@ export default function InvoiceCashForecastFocusPage() {
         drivingObligation={drivingObligation}
       />
 
-      {/* 3. Prominent Cobalt Blue CTA: View Market Offers */}
+      {/* 3. Verification call.
+          Offered only when the tier can actually move. On a buyer-accepted
+          invoice the button would do nothing, and a control that does nothing
+          teaches people to distrust the ones that do. */}
+      {verificationTier !== "BUYER_ACCEPTED" && opp.invoice?.id && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                This invoice is not buyer-accepted
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                Providers are pricing it against{" "}
+                <span className="font-medium">Vertex&apos;s</span> credit and the risk
+                that the buyer disputes it. A confirmation from{" "}
+                <span className="font-medium">{buyerName}</span> moves that risk onto
+                the buyer&apos;s balance sheet, which is materially cheaper.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCallOpen(true)}
+              className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+            >
+              Verify by call
+            </button>
+          </div>
+        </div>
+      )}
+
+      <VoiceVerificationModal
+        isOpen={callOpen}
+        onClose={() => setCallOpen(false)}
+        invoiceId={opp.invoice?.id ?? ""}
+        onVerified={() => {
+          // Refetch rather than patch local state: the tier is one of several
+          // things the upgrade changes, and re-reading is how the page and the
+          // database stay in agreement.
+          void loadOpp();
+        }}
+      />
+
+      {/* 4. Prominent Cobalt Blue CTA: View Market Offers */}
       <RunAuctionButton invoiceId={id} />
     </div>
   );

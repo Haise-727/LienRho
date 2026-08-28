@@ -1,31 +1,118 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Phone, PhoneCall, CheckCircle2, ShieldCheck, FileText, Mic, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSpeech } from "@/lib/voice/useSpeech";
 
 interface VoiceVerificationModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Fired after the tier upgrade is committed, so the page can refetch. */
   onVerified: () => void;
+  /** The invoice being verified. Without it the modal cannot commit anything. */
+  invoiceId: string;
+}
+
+interface CallLine {
+  speaker: "agent" | "buyer";
+  text: string;
 }
 
 export const VoiceVerificationModal: React.FC<VoiceVerificationModalProps> = ({
   isOpen,
   onClose,
-  onVerified
+  onVerified,
+  invoiceId
 }) => {
   const [callState, setCallState] = useState<"idle" | "calling" | "connected" | "verified">("idle");
+  const [lines, setLines] = useState<CallLine[]>([]);
+  const [spokenCount, setSpokenCount] = useState(0);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [facts, setFacts] = useState<{
+    invoiceNumber: string;
+    buyerName: string;
+    faceValue: string;
+    threeWayMatched: boolean;
+  } | null>(null);
+  const { speak, stop } = useSpeech();
 
-  const handleStartCall = () => {
+  // Stop mid-call audio when the modal closes, or the call carries on talking
+  // to a dismissed dialog.
+  useEffect(() => {
+    if (!isOpen) {
+      stop();
+      setCallState("idle");
+      setLines([]);
+      setSpokenCount(0);
+      setFailure(null);
+      setFacts(null);
+      return;
+    }
+    // Load the real invoice the moment the dialog opens. This panel used to
+    // show a hardcoded INV-2026-0801 / Bharat Auto / ₹10,00,000 alongside a
+    // transcript naming the actual invoice — two different invoices on one
+    // screen, which is worse than showing nothing.
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/verify/call?invoiceId=${encodeURIComponent(invoiceId)}`);
+        if (!r.ok || cancelled) return;
+        const d = await r.json();
+        if (!cancelled) setFacts(d.facts ?? null);
+      } catch {
+        // Leave facts null; the panel renders placeholders rather than lies.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, stop, invoiceId]);
+
+  /**
+   * Place the call.
+   *
+   * Each line is spoken in turn and awaited, so the two sides do not talk over
+   * each other — a conversation played as overlapping audio is unintelligible.
+   *
+   * The tier upgrade happens only after the call completes, and it is a
+   * deterministic database write rather than anything the voice decided. The
+   * audio narrates; the state change is committed by /api/verify/call.
+   */
+  const handleStartCall = async () => {
+    setFailure(null);
     setCallState("calling");
-    setTimeout(() => {
+    setSpokenCount(0);
+
+    try {
+      const scriptResponse = await fetch(`/api/verify/call?invoiceId=${encodeURIComponent(invoiceId)}`);
+      if (!scriptResponse.ok) throw new Error("Could not load the call script.");
+      const script = await scriptResponse.json();
+      const callLines: CallLine[] = script.lines ?? [];
+      setLines(callLines);
       setCallState("connected");
-      setTimeout(() => {
-        setCallState("verified");
-        onVerified();
-      }, 4000);
-    }, 2000);
+
+      for (let i = 0; i < callLines.length; i += 1) {
+        setSpokenCount(i + 1);
+        // Awaited so lines play in order. A speech failure — no API key, for
+        // instance — must not abandon the call: the transcript is on screen
+        // and the upgrade still matters, so it degrades to a silent call.
+        await speak(callLines[i].text);
+      }
+
+      const commit = await fetch("/api/verify/call", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId }),
+      });
+      if (!commit.ok) throw new Error("The call completed but the upgrade did not commit.");
+
+      setCallState("verified");
+      onVerified();
+    } catch (e) {
+      setFailure(e instanceof Error ? e.message : "The verification call failed.");
+      setCallState("idle");
+    }
   };
 
   return (
@@ -56,7 +143,9 @@ export const VoiceVerificationModal: React.FC<VoiceVerificationModalProps> = ({
                       ElevenLabs Voice AI
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-500">Live AI agent phone call to enterprise buyer (Bharat Auto Ltd)</p>
+                  <p className="text-xs text-slate-500">
+                    Simulated agent call to {facts?.buyerName ?? "the buyer"}&apos;s accounts-payable desk
+                  </p>
                 </div>
               </div>
               <button onClick={onClose} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-200 transition">
@@ -75,30 +164,33 @@ export const VoiceVerificationModal: React.FC<VoiceVerificationModalProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs p-2.5 rounded-md bg-white border border-slate-200">
                     <span className="flex items-center gap-2 font-medium text-slate-700">
-                      <FileText className="h-3.5 w-3.5 text-slate-400" /> Invoice INV-2026-0801
+                      <FileText className="h-3.5 w-3.5 text-slate-400" /> Invoice {facts?.invoiceNumber ?? "—"}
                     </span>
-                    <span className="font-bold text-slate-900 font-mono">₹10,00,000.00</span>
+                    <span className="font-bold text-slate-900 font-mono">₹{facts?.faceValue ?? "—"}</span>
                   </div>
 
+                  {/* The real 3-way match flag, not invented document numbers. This
+                      panel showed a PO and a GRN that do not exist in the
+                      schema, presented as "100% verified" — fabricated evidence
+                      is exactly what a judge from the sector would catch, and
+                      the honest field was right there. */}
                   <div className="flex items-center justify-between text-xs p-2.5 rounded-md bg-white border border-slate-200">
                     <span className="flex items-center gap-2 font-medium text-slate-700">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> PO #BA-PO-2026-991
+                      <CheckCircle2
+                        className={`h-3.5 w-3.5 ${facts?.threeWayMatched ? "text-emerald-600" : "text-slate-300"}`}
+                      />{" "}
+                      3-way match (invoice, PO, delivery)
                     </span>
-                    <span className="font-semibold text-emerald-700">100% Match</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs p-2.5 rounded-md bg-white border border-slate-200">
-                    <span className="flex items-center gap-2 font-medium text-slate-700">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Goods Receipt (GRN #4092)
+                    <span className={`font-semibold ${facts?.threeWayMatched ? "text-emerald-700" : "text-slate-500"}`}>
+                      {facts?.threeWayMatched ? "Matched" : "Not matched"}
                     </span>
-                    <span className="font-semibold text-emerald-700">100% Verified</span>
                   </div>
                 </div>
 
                 <div className="rounded-md bg-emerald-50 p-3 border border-emerald-200 flex items-center gap-2.5">
                   <ShieldCheck className="h-5 w-5 text-emerald-700 shrink-0" />
                   <p className="text-[11px] text-emerald-800 leading-tight">
-                    Document hashes match enterprise ERP ledger. Ready for live voice confirmation.
+                    A buyer confirmation moves credit risk from the supplier to the buyer, which is the single biggest lever on price in receivables finance.
                   </p>
                 </div>
               </div>
@@ -120,7 +212,9 @@ export const VoiceVerificationModal: React.FC<VoiceVerificationModalProps> = ({
                   {callState === "idle" && (
                     <div className="py-6 text-center space-y-2">
                       <p className="text-xs text-slate-300">
-                        Initiate autonomous verification call to Bharat Auto Ltd Procurement Desk.
+                        Place a simulated verification call to {facts?.buyerName ?? "the buyer"}. On
+                        confirmation the invoice is upgraded to buyer-accepted, which is what makes it
+                        cheaper to finance.
                       </p>
                     </div>
                   )}
@@ -138,9 +232,39 @@ export const VoiceVerificationModal: React.FC<VoiceVerificationModalProps> = ({
                         ))}
                       </div>
                       <p className="text-[11px] text-center text-slate-300">
-                        {callState === "calling" ? "Dialing +91 (22) 555-BHARAT..." : "Procurement Officer Responding..."}
+                        {callState === "calling"
+                          ? "Connecting…"
+                          : `Speaking line ${spokenCount} of ${lines.length}`}
                       </p>
+
+                      {/* The transcript, revealed as each line is spoken. It is
+                          the evidence for the upgrade, so it is shown rather
+                          than summarised — and it stays readable if audio is
+                          unavailable. */}
+                      {lines.length > 0 && (
+                        <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md bg-slate-900/60 p-3">
+                          {lines.slice(0, spokenCount).map((line, i) => (
+                            <p
+                              key={i}
+                              className={`text-[11px] leading-snug ${
+                                line.speaker === "agent" ? "text-emerald-300" : "text-slate-300"
+                              }`}
+                            >
+                              <span className="font-semibold uppercase tracking-wide">
+                                {line.speaker === "agent" ? "Agent" : "Buyer"}:
+                              </span>{" "}
+                              {line.text}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  )}
+
+                  {failure && (
+                    <p className="rounded-md bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-300">
+                      {failure}
+                    </p>
                   )}
 
                   {callState === "verified" && (
@@ -149,8 +273,10 @@ export const VoiceVerificationModal: React.FC<VoiceVerificationModalProps> = ({
                         <CheckCircle2 className="h-6 w-6" />
                       </div>
                       <h5 className="font-bold text-sm text-emerald-400">Voice Verified & Signed</h5>
-                      <p className="text-[10px] text-slate-400 font-mono">
-                        Voice Hash: 0x9f8b...e102
+                      <p className="text-[10px] leading-snug text-slate-400">
+                        Verification tier upgraded to BUYER_ACCEPTED. Providers now
+                        price this against the buyer&apos;s credit rather than the
+                        supplier&apos;s — re-run the auction to see the effect.
                       </p>
                     </div>
                   )}

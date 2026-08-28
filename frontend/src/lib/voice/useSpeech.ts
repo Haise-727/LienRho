@@ -79,13 +79,54 @@ export function useSpeech() {
         audioRef.current = audio;
 
         await new Promise<void>((resolve, reject) => {
-          audio.onended = () => resolve();
-          audio.onerror = () => reject(new Error("Audio playback failed"));
+          let settled = false;
+          let watchdog: ReturnType<typeof setTimeout> | undefined;
+
+          const finish = (err?: Error) => {
+            if (settled) return;
+            settled = true;
+            if (watchdog) clearTimeout(watchdog);
+            audio.onended = null;
+            audio.onerror = null;
+            if (err) reject(err);
+            else resolve();
+          };
+
+          audio.onended = () => finish();
+          audio.onerror = () => finish(new Error("Audio playback failed"));
+
           setState("playing");
           // Browsers block autoplay without a user gesture. Every caller is
           // inside a click handler, so this should not fire — but if it does,
           // surface it rather than hanging in "playing" forever.
-          audio.play().catch(reject);
+          audio.play().catch((e) => finish(e instanceof Error ? e : new Error("play() failed")));
+
+          // Track playback position rather than trusting `ended`.
+          //
+          // `ended` does not reliably fire for these blob-backed elements —
+          // observed directly: a five-line call stalled after line one with no
+          // error, because the awaited promise never settled. A live demo must
+          // not hang on one event failing to arrive.
+          //
+          // So poll. Once metadata gives a duration, finish when playback
+          // reaches it; before that, fall back to a wall-clock ceiling
+          // generous enough for the longest clip we send. Polling at 100ms
+          // keeps the gap between lines imperceptible.
+          const started = Date.now();
+          const tick = () => {
+            if (settled) return;
+            const duration = audio.duration;
+            const hasDuration = Number.isFinite(duration) && duration > 0;
+            const elapsed = (Date.now() - started) / 1000;
+
+            if (audio.ended) return finish();
+            // 0.15s of slack: currentTime often stops a frame short of duration.
+            if (hasDuration && audio.currentTime >= duration - 0.15) return finish();
+            if (elapsed > (hasDuration ? duration + 3 : 45)) return finish();
+
+            watchdog = setTimeout(tick, 100);
+          };
+          watchdog = setTimeout(tick, 100);
         });
 
         if (aliveRef.current) setState("idle");
