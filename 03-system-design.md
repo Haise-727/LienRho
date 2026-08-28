@@ -1,0 +1,184 @@
+# System design — «PROJECT»
+
+Proposed architecture for PS-5. Design intent and rationale only; no code.
+
+---
+
+## Actors
+
+| Actor | Role | Agency |
+|---|---|---|
+| **Supplier** | Holds receivables, needs working capital | Represented by an agent that infers their needs |
+| **Capital provider** | Bank / NBFC / fund / fintech with deployable capital | One agent each, evaluating within its own mandate |
+| **Buyer** | Owes the invoice | Passive — a verification target and a credit input, not a user |
+| **Platform** | Verifies, assesses, routes, clears, settles, learns | The clearing agent plus deterministic engines |
+
+---
+
+## The allocation loop
+
+PS-5 specifies it: *Invoice → Verify → Assess Risk → Discover Capital →
+Generate Offers → Compare → Match → Finance → Settle → Learn.*
+
+```
+   ┌──────────── LEARN ◄─── SETTLE ◄─── FINANCE ◄─── MATCH
+   │                                                    ▲
+   ▼                                                    │
+INVOICE ──► VERIFY ──► ASSESS RISK ──► DISCOVER ──► GENERATE ──► COMPARE
+                                       CAPITAL       OFFERS
+```
+
+The feedback edge is what makes it a market rather than a pipeline: realised
+settlement behaviour changes future routing, pricing, and scoring.
+
+---
+
+## Modules
+
+### 1. Ingestion & Verification `(R1)`
+
+Reads invoices from the accounting system of record and assigns a **graded
+verification tier** — never a boolean:
+
+| Tier | Basis | Effect on pricing |
+|---|---|---|
+| **Buyer-accepted** | Buyer has formally acknowledged the debt | Lowest uncertainty; priced closest to buyer credit |
+| **Ledger-verified** | Present and consistent in the supplier's books, with delivery evidence | Moderate |
+| **Supplier-asserted** | Claimed, unconfirmed | Highest uncertainty; many providers will decline outright |
+
+Graded because providers price the difference; flattening it destroys the
+information that makes the market efficient (`01-commerce-analysis.md` §8).
+
+### 2. Risk Engine `(R5)`
+
+Reuses the existing model, repurposed. Produces:
+
+- probability of payment across time buckets → **PD**
+- expected dilution (disputes, short payment) → informs **LGD**
+- a **risk grade** and the confidence attached to it
+- feature-level explanation, because providers need to see *why*
+
+Must expose calibration quality alongside every estimate. A provider consuming
+an uncalibrated PD is being misled, and will eventually price for that.
+
+### 3. Supplier Utility Engine `(R4)` ← *the differentiator*
+
+Derives what this supplier needs from observable cash position rather than
+asking:
+
+- **Sufficiency floor** — minimum net cash that solves the problem
+- **Timing deadline** — the date by which it must land
+- **Cost sensitivity** — how much price matters once the above are satisfied
+
+Structured **lexicographically**: sufficiency and timing act as gates; cost
+ranks the survivors. A weighted sum would let a cheap, slow, insufficient offer
+outrank one that actually works — the exact failure PS-5 calls out.
+
+### 4. Capital Provider Registry `(R2, R6)`
+
+Each provider carries: cost of funds, risk appetite floor, available liquidity,
+ticket range, tenor limits, sector preferences, concentration caps, hurdle rate,
+and settlement capability.
+
+Private by construction — a provider's mandate is never visible to other
+providers, and the scoring engine must not read provider internals
+(`01-commerce-analysis.md` §6).
+
+### 5. Opportunity Router `(R2)`
+
+Decides which providers see which opportunities. Two filters:
+
+- **Eligibility** — hard constraints: ticket size, tenor, sector, risk floor,
+  concentration headroom
+- **Suitability** — soft ranking: would this plausibly clear their hurdle?
+
+Routing everything to everyone is not a marketplace, it is a mailing list, and
+it wastes provider attention — which is a real cost in the real version.
+
+### 6. Offer Engine `(R3)`
+
+Provider agents price within their mandates, producing offers that vary across
+rate, advance rate, fees, tenor, settlement speed, recourse, and repayment
+structure.
+
+**The LLM decides posture — aggressive, conservative, decline — and
+deterministic functions compute every number.** This is the old tool boundary,
+unchanged in principle and more consequential in effect.
+
+### 7. Scoring & Comparison `(R4)`
+
+Deterministic throughout. Computes effective cost, net cash, and arrival date
+per offer, then ranks against the supplier's utility structure. Publishes the
+rule so providers can bid efficiently.
+
+Must be able to return **no acceptable offer**.
+
+### 8. Matching & Allocation `(R2, R6)`
+
+Selects the winner, or splits across providers when no single one has the
+liquidity or concentration headroom for the whole amount. Re-checks constraints
+at allocation time, because a provider's position may have moved since it bid.
+
+### 9. Settlement Tracker `(R7)`
+
+Lifecycle: `MATCHED → DISBURSING → DISBURSED → AWAITING_BUYER → BUYER_PAID →
+RESERVE_RELEASED → CLOSED`, with failure branches for non-disbursement, late or
+short buyer payment, and dispute.
+
+Records **quoted vs realised** at every step. That delta is the input to
+learning.
+
+### 10. Learning Loop `(R7)`
+
+- provider reliability scores from quoted-vs-delivered settlement
+- risk model recalibration against realised outcomes
+- routing adjustments from which providers actually bid and win
+
+Closes the loop and gives the "Learn" step something concrete to do rather than
+being a diagram label.
+
+---
+
+## Agents
+
+| Agent | Owns | Never does |
+|---|---|---|
+| **Verification** | Judging evidence quality, flagging inconsistency | Assert a fact the ledger doesn't support |
+| **Supplier advocate** | Inferring needs, interpreting the cash position, selecting | Compute cost or accept a headline rate at face value |
+| **Provider agent** (×N) | Evaluating fit and choosing pricing posture | Compute any rupee figure |
+| **Clearing agent** | Running the auction, allocating, handling partial fills | Override the deterministic score |
+
+All four sit behind the same boundary: **judgement is the model's; arithmetic is
+the code's.**
+
+---
+
+## Data model — new entities
+
+Alongside the existing Invoice / Customer / Payment:
+
+| Entity | Key fields |
+|---|---|
+| **CapitalProvider** | liquidity, appetite, hurdle rate, ticket range, concentration caps, settlement capability |
+| **FinancingOpportunity** | invoice, verification tier, risk grade, requested amount, supplier utility profile |
+| **Offer** | provider, rate, advance rate, fees, tenor, settlement speed, recourse, structure, expiry |
+| **ScoredOffer** | offer, net cash, effective cost, arrival date, utility score, rank, gate outcomes |
+| **Match** | opportunity, winning offer(s), allocation split, constraint snapshot at allocation |
+| **Settlement** | match, lifecycle state, quoted vs realised timings and amounts |
+| **ProviderPerformance** | rolling reliability, realised-vs-quoted deltas, win rate |
+
+Invoice gains: **buyer acceptance status** and **verification tier** — the two
+fields that move pricing most.
+
+---
+
+## Boundaries worth stating
+
+- **No real money, no live provider integrations.** A simulated market, labelled
+  as one.
+- **Deterministic finance.** Every figure from a named, recorded function.
+- **Provider isolation.** Bids and mandates are private; this is a tenancy
+  requirement, not a UI concern.
+- **Fallback everywhere.** A dead LLM degrades the market; it never halts it.
+- **Collections is out of scope.** Chasing, escalation, and statutory recovery
+  belong to a different product.
