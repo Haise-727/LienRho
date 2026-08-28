@@ -112,7 +112,7 @@ Provider agents price within their mandates, producing offers that vary across
 rate, advance rate, fees, tenor, settlement speed, recourse, and repayment
 structure.
 
-**The LLM decides posture — aggressive, conservative, decline — and
+**NexusX Multi-Agent coordination runs the bidding. ElevenLabs Voice AI provides the CFO Voice Cockpit and Outbound Verification Bot.
 deterministic functions compute every number.** This is the old tool boundary,
 unchanged in principle and more consequential in effect.
 
@@ -139,7 +139,7 @@ sufficient at hackathon scale, and it's the same discipline already used
 elsewhere (durable audit trail via Postgres, not an in-memory store that loses
 state). Revisit only if a real throughput number ever demands it.
 
-### 9. Settlement Tracker `(R7)`
+### 9. Settlement Tracker `(R7)` (Stitch Double-Entry Ledger)
 
 **The state machine spans the whole opportunity, not just post-match:**
 
@@ -211,7 +211,7 @@ fields that move pricing most.
 
 ## Boundaries worth stating
 
-- **No real money, no live provider integrations.** A simulated market, labelled
+- **Simulated market with Stitch Mock Fintech Rails, ElevenLabs WebRTC Call Simulator, and CodeCrafters Matcher.** A simulated market, labelled
   as one.
 - **Deterministic finance.** Every figure from a named, recorded function.
 - **Provider isolation.** Bids and mandates are private; this is a tenancy

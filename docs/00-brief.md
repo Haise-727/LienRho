@@ -74,7 +74,7 @@ load-bearing, not less.
 
 ## Scale of the change, honestly
 
-Roughly a third of the existing engineering value transfers directly (data
+We are migrating fully to a Next.js Full-Stack architecture with Prisma and Redis. All legacy Python/FastAPI collections code is being removed to focus 100% on the multi-agent capital marketplace for the 2-hour MVP.
 model, risk model, agent scaffolding, audit trail, auth, connector,
 infrastructure). Roughly forty percent is dead on arrival because it encodes
 collections logic. The remainder — everything provider-side, the auction, the

@@ -12,9 +12,9 @@ already uses the name directly rather than a placeholder.
 
 ---
 
-## 2. Infrastructure (AWS) — ⏸ Deferred
+## 2. Infrastructure (AWS) — ✅ Decided
 
-**Decision (this session):** not now. Local/deterministic — FastAPI + Postgres
+**Decision:** Next.js Full-Stack, Prisma ORM, Redis. Deployment targets AWS ECS Fargate, Aurora Serverless v2, ElastiCache Redis, S3.
 + Docker Compose, the same posture as the transferred base — until the core
 marketplace logic (phases 0–3 of `04-build-plan.md`) actually works. AWS
 service selection is real, non-trivial work (ECS vs. Lambda, RDS vs. Aurora
@@ -31,9 +31,26 @@ week" as separate questions.
 
 ---
 
-## 3. Sponsor Integrations — ⏸ Deferred
+## 3. Sponsor Integrations — ✅ Decided (Phase 1 MVP)
 
-**Decision (this session):** not alongside the core build. Revisit only once
+**Decision:** ALL SPONSORS are mandatory for the 2-hour hackathon MVP.
+
+### ElevenLabs (Voice / Audio)
+- **Interactive CFO Voice Cockpit**
+- **Outbound verification call bot (WebRTC)**
+- **Audio Deal Explainer**
+
+### Stitch
+- **Lending & Credit Origination**
+- **KYB & Account Verification**
+- **Double-Entry Ledger & Reconciliation**
+
+### CodeCrafters
+- **Multi-Attribute Utility / Pareto Matching Algorithm**
+- **Redis atomic distributed locking**
+
+### NexusX
+- **Autonomous multi-agent coordination** (Supplier, Lender, Market Clearing)
 phases 0–3 are solid. Recorded here with the sharper versions of each idea so
 that if/when this is revisited, the team isn't starting from "what could we
 even build":
