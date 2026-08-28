@@ -49,6 +49,17 @@ verification tier** — never a boolean:
 Graded because providers price the difference; flattening it destroys the
 information that makes the market efficient (`01-commerce-analysis.md` §8).
 
+**Two concrete checks belong here, both cheap:**
+
+- **Anti-double-financing.** Hash `(seller_tax_id, buyer_tax_id,
+  invoice_number)`, reject on collision. A Postgres unique constraint, not a
+  service — see `01-commerce-analysis.md` §8.5 for what it does and doesn't
+  catch.
+- **3-way match**, where the source data supports it: invoice vs. purchase
+  order vs. proof of delivery. This is what actually earns an invoice the
+  "ledger-verified" tier rather than "supplier-asserted" — a match across all
+  three is a materially stronger claim than the invoice alone.
+
 ### 2. Risk Engine `(R5)`
 
 Reuses the existing model, repurposed. Produces:
@@ -119,11 +130,37 @@ Selects the winner, or splits across providers when no single one has the
 liquidity or concentration headroom for the whole amount. Re-checks constraints
 at allocation time, because a provider's position may have moved since it bid.
 
+**Concurrency is a real correctness concern, not a scale concern.** Two
+opportunities can legitimately try to draw down the same provider's remaining
+liquidity or concentration headroom at once. The MVP answer doesn't need
+Redis or distributed locking: a Postgres transaction that reads the provider's
+committed capacity, checks headroom, and writes the allocation atomically is
+sufficient at hackathon scale, and it's the same discipline already used
+elsewhere (durable audit trail via Postgres, not an in-memory store that loses
+state). Revisit only if a real throughput number ever demands it.
+
 ### 9. Settlement Tracker `(R7)`
 
-Lifecycle: `MATCHED → DISBURSING → DISBURSED → AWAITING_BUYER → BUYER_PAID →
-RESERVE_RELEASED → CLOSED`, with failure branches for non-disbursement, late or
-short buyer payment, and dispute.
+**The state machine spans the whole opportunity, not just post-match:**
+
+```
+RECEIVED → VERIFIED → AUCTION_LIVE → MATCHED → DISBURSING → DISBURSED
+  → AWAITING_BUYER → BUYER_PAID → RESERVE_RELEASED → CLOSED
+                    ↘ DEFAULTED / DISPUTED (from AWAITING_BUYER)
+```
+
+**How the provider actually gets repaid:** the provider advances cash to the
+supplier now; the buyer's original payment on the due date is redirected —
+contractually, not necessarily technically — to the provider (directly, or via
+an escrow-like holding step) rather than to the supplier, since the supplier
+was already paid. The reserve (the un-advanced portion) releases to the
+supplier only after that redirected payment clears. This is the mechanical
+detail that makes "the provider gets repaid" concrete rather than assumed; it
+belongs in the settlement design, not left implicit.
+
+Failure branches: non-disbursement, late or short buyer payment, dispute
+(matches the `DISPUTED` branch above and the 3-way-match failure case in
+Module 1).
 
 Records **quoted vs realised** at every step. That delta is the input to
 learning.
