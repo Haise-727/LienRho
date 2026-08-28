@@ -98,11 +98,47 @@ the seed on purpose — a number on the demo that nothing computed is the one
 thing we promised not to ship.
 
 Two gates come before ranking, and they are **lexicographic, not weights**:
-`FinancingOpportunity.sufficiencyFloor` (does this offer's net cash actually
-cover what the supplier needs?) and `timingDeadline` (does it land in time?).
-An offer failing either is *disqualified*, not merely ranked lower. A weighted
-sum would let a cheap, slow offer beat one that actually makes payroll, which
-is the exact failure PS-5 calls out.
+sufficiency (does this offer's net cash cover what the supplier needs?) and
+timing (does it land before the deadline?). An offer failing either is
+*disqualified*, not merely ranked lower. A weighted sum would let a cheap, slow
+offer beat one that actually makes payroll — the exact failure PS-5 calls out.
+
+`sufficiencyFloor`, `timingDeadline`, `drivingObligation` and `urgencyWeight`
+on `FinancingOpportunity` are **null in the seed on purpose** — they are your
+outputs, not your inputs. Derive them from `opportunity.cashPosition`, which
+ships with the opportunity in one round trip:
+
+```ts
+cashPosition: {
+  currentCashPaise: 56072836,      // reconciles with the ledger cash account
+  cashThresholdPaise: 10000000,    // buffer the business won't go below
+  obligations: [                   // dated and itemised, ordered by dueDate
+    { label: "September payroll",              amountPaise: 90000000, dueDate: "..." },
+    { label: "Kalyani Steel — billet delivery", amountPaise: 46072836, dueDate: "..." },
+  ],
+}
+```
+
+Money here is `Int` **paise**, matching your `Paise` alias — no Decimal at this
+boundary. Ceiling is ~₹2.14 crore (Postgres `Int`); fine for working capital,
+which is why provider liquidity stays `Decimal`. If that ever binds, the column
+becomes `BigInt` and `Paise` becomes `bigint` on the same commit.
+
+The derivation walks obligations in date order and stops at the **first** day
+cash falls below the threshold. Order matters: an unclearable obligation
+sitting behind a clearable one would never drive the floor.
+
+Seeded so the gates visibly discriminate:
+
+| Opportunity | Floor | By | Outcome |
+|---|---|---|---|
+| `INV-2026-0801` (Vertex) | ₹9,00,000 | day 2 | Rapidfin clears; Meridian and Kaveri fail sufficiency |
+| `INV-2026-0803` (Kalinga) | ₹21,10,000 | day 3 | nothing clears → `NO_ACCEPTABLE_OFFER` |
+
+Note Kaveri is the **cheapest** offer by effective cost (13.34%) and is still
+disqualified, because it delivers ₹8,65,763.84 against a ₹9,00,000 floor. That
+is the lexicographic model earning its keep — a weighted sum would have ranked
+it first.
 
 **Do not read provider internals in the scorer.** `costOfFunds`, `hurdleRate`,
 `riskAppetiteFloor`, `concentrationLimitPct` belong to the bidding side. If the

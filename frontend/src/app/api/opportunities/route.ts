@@ -21,6 +21,10 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
       include: {
         invoice: { include: { customer: true } },
+        // The raw cash facts Track 2's deriveSupplierUtility() reads. Shipped
+        // with the opportunity so the derivation needs one round trip, not two.
+        cashPosition: { include: { obligations: { orderBy: { dueDate: "asc" } } } },
+
         bids: {
           orderBy: [{ rank: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
           include: { provider: { select: { id: true, name: true, archetype: true, settlementDays: true, reliabilityScore: true } } },

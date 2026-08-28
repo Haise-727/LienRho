@@ -47,6 +47,7 @@ model Organization {
   provider      CapitalProvider?
   accounts      Account[]
   opportunities FinancingOpportunity[]
+  cashPositions SupplierCashPosition[]
 
   @@index([type])
 }
@@ -187,9 +188,10 @@ enum OpportunityStatus {
   BUYER_PAID
   RESERVE_RELEASED
   CLOSED
-  /// Nothing cleared the supplier's floor. A market that always transacts is
-  /// not exercising judgement.
-  NO_MATCH
+  /// Nothing cleared the supplier's floor. A first-class outcome, not an
+  /// error: a market that always transacts is not exercising judgement.
+  /// Same word as MatchResult in lib/market/types.ts, deliberately.
+  NO_ACCEPTABLE_OFFER
   DEFAULTED
   DISPUTED
 }
@@ -210,21 +212,34 @@ model FinancingOpportunity {
   probabilityOfDefault Decimal? @db.Decimal(9, 6)
   expectedDilutionPct  Decimal? @db.Decimal(9, 6)
 
-  /// Supplier utility, derived from the cash forecast rather than asked for
-  /// (docs/01-commerce-analysis.md §4). These two are lexicographic gates:
-  /// an offer failing either is disqualified, not merely ranked lower.
+  /// Supplier utility — DERIVED by Track 2's deriveSupplierUtility() from the
+  /// linked SupplierCashPosition and written back here. Null in the seed on
+  /// purpose: seeding these would delete the derivation and leave us
+  /// re-displaying an input we invented, which is the differentiator
+  /// docs/01-commerce-analysis.md §4 rests on.
+  ///
+  /// The first two are lexicographic GATES, not weights: an offer failing
+  /// either is disqualified, not merely ranked lower. A weighted sum would let
+  /// a cheap, slow offer outrank one that actually makes payroll.
   sufficiencyFloor Decimal?  @db.Decimal(18, 2)
   timingDeadline   DateTime?
-  /// Inferred position on the urgency-vs-cost axis, 0 = pure cost, 1 = pure
-  /// urgency. Shown to the supplier pre-positioned; they may nudge it.
-  urgencyWeight    Decimal   @default("0.5") @db.Decimal(9, 6)
+  /// Which obligation drove the floor, so the UI can explain the gate.
+  drivingObligation String?
+  /// Derived position on the urgency-vs-cost axis, 0 = pure cost, 1 = pure
+  /// urgency. The slider renders this pre-positioned; a slider with no default
+  /// is the self-reported-weights problem wearing a different widget.
+  urgencyWeight    Decimal?  @db.Decimal(9, 6)
+  /// The cash snapshot the derivation read, kept so a past decision stays
+  /// reproducible after the supplier's position moves.
+  cashPositionId   String?
 
   auctionClosesAt DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  org           Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  org           Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invoice       Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  cashPosition  SupplierCashPosition? @relation(fields: [cashPositionId], references: [id], onDelete: SetNull)
   bids          Bid[]
   match         Match?
   journalEntries JournalEntry[]
@@ -337,6 +352,63 @@ model Match {
   provider    CapitalProvider      @relation(fields: [providerId], references: [id])
 
   @@index([providerId])
+}
+
+/// Observable cash facts about a supplier, as at a point in time.
+///
+/// Seeded as RAW FACTS — never as a pre-computed urgency number. The whole
+/// differentiator (docs/01-commerce-analysis.md §4) is that the platform
+/// *derives* what a supplier needs by reading their cash position, because
+/// nobody can honestly self-report that they value settlement speed at 0.3;
+/// elicited weights are noise dressed as data. A seeded `urgency: 0.7` would
+/// skip the one step that makes this project interesting.
+///
+/// Money here is Int paise, matching the `Paise` alias in
+/// frontend/src/lib/market/types.ts, so Track 2's scorer reads it without a
+/// conversion at the boundary.
+///
+/// Known ceiling: Postgres Int stops at 2,147,483,647 paise, about ₹2.14
+/// crore. That is the right order for supplier working capital and the wrong
+/// one for a balance sheet, which is why provider liquidity stays Decimal. If
+/// a supplier ever needs to exceed it, this becomes BigInt and Track 2's
+/// `Paise` becomes `bigint` on the same commit.
+model SupplierCashPosition {
+  id                 String   @id @default(cuid())
+  orgId              String
+  asOfDate           DateTime
+  /// Cash actually in hand. Reconciles with the `supplier:<slug>:cash` ledger
+  /// account — the seed reads this back off that account so the two cannot
+  /// drift apart.
+  currentCashPaise   Int
+  /// The buffer the business will not go below.
+  cashThresholdPaise Int
+  createdAt          DateTime @default(now())
+
+  org           Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  obligations   CashObligation[]
+  opportunities FinancingOpportunity[]
+
+  @@index([orgId])
+  @@index([asOfDate])
+}
+
+/// One dated thing the supplier has to pay.
+///
+/// Dated and itemised rather than aggregated into a single "upcoming expenses"
+/// figure: the sufficiency floor is only explicable on stage if the system can
+/// name the obligation that produced it — "you need ₹9,00,000 by Friday
+/// because payroll is ₹9,00,000 and Kalyani Steel is ₹4,60,728".
+model CashObligation {
+  id             String   @id @default(cuid())
+  cashPositionId String
+  label          String
+  amountPaise    Int
+  dueDate        DateTime
+
+  cashPosition SupplierCashPosition @relation(fields: [cashPositionId], references: [id], onDelete: Cascade)
+
+  @@index([cashPositionId])
+  @@index([dueDate])
 }
 
 // ------------------------------------------- Stitch-style double-entry ledger
