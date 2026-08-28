@@ -15,15 +15,43 @@ interface ObjectiveConstraintsCardProps {
 
 export function ObjectiveConstraintsCard({
   sufficiencyFloor,
-  sufficiencyFloorPaise = 90000000,
-  timingDeadline = "2026-08-30",
+  // No defaults on these two.
+  //
+  // 94edf09 made the API derive each opportunity's real gates and the page
+  // stopped defaulting them — but the card still defaulted `paise` to the demo
+  // invoice's 90000000 and preferred it over the rupee prop the page actually
+  // passes. The visible result was "You need ₹9,00,000.00 for GST remittance":
+  // the obligation correct and derived, the amount the worked example's, in one
+  // sentence contradicting itself.
+  sufficiencyFloorPaise,
+  timingDeadline,
   drivingObligation,
   currentCash = "0.00",
   cashThreshold = "100000.00",
 }: ObjectiveConstraintsCardProps) {
-  const formattedFloor = sufficiencyFloorPaise 
-    ? formatPaiseToINR(sufficiencyFloorPaise) 
-    : formatINR(sufficiencyFloor);
+  // Whichever the caller actually supplied. Preferring paise unconditionally
+  // meant a correct rupee value lost to an absent paise one.
+  const formattedFloor =
+    sufficiencyFloorPaise != null
+      ? formatPaiseToINR(sufficiencyFloorPaise)
+      : sufficiencyFloor != null
+        ? formatINR(sufficiencyFloor)
+        : null;
+
+  // A supplier whose obligations are covered by cash on hand has no gates —
+  // cost alone decides. Rendering blanks, or worse the demo's thresholds,
+  // would claim a constraint that does not exist.
+  if (formattedFloor == null || timingDeadline == null) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 className="text-sm font-semibold text-slate-900">No projected shortfall</h3>
+        <p className="mt-1 text-xs leading-relaxed text-slate-600">
+          This supplier&apos;s dated obligations are covered by cash on hand, so neither the
+          sufficiency nor the timing gate binds here. Offers are ranked on true cost alone.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xs space-y-6">
@@ -60,7 +88,7 @@ export function ObjectiveConstraintsCard({
               {formattedFloor}
             </div>
             <div className="text-sm font-semibold text-slate-800">
-              You need {formattedFloor} for {drivingObligation || "September Payroll"}.
+              You need {formattedFloor} for {drivingObligation ?? "an upcoming obligation"}.
             </div>
             <p className="text-xs text-slate-500 leading-relaxed pt-1">
               Any institutional offer delivering net proceeds below this threshold is disqualified, even if it quotes a lower headline APR.

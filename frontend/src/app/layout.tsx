@@ -17,7 +17,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body className="antialiased bg-[#F8FAFC] text-[#0F172A] selection:bg-emerald-600 selection:text-white">
+      <body suppressHydrationWarning className="antialiased bg-[#F8FAFC] text-[#0F172A] selection:bg-emerald-600 selection:text-white">
         <UserProvider>
           <AppShell>{children}</AppShell>
         </UserProvider>
