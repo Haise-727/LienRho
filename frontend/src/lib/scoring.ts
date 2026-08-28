@@ -1,0 +1,422 @@
+// Domain Types matching Prisma Schema & Track 1/2 contracts
+
+export type VerificationTier = "BUYER_ACCEPTED" | "LEDGER_VERIFIED" | "SUPPLIER_ASSERTED";
+export type OpportunityStatus = 
+  | "RECEIVED" 
+  | "VERIFIED" 
+  | "AUCTION_LIVE" 
+  | "MATCHED" 
+  | "DISBURSING" 
+  | "DISBURSED" 
+  | "AWAITING_BUYER" 
+  | "BUYER_PAID" 
+  | "RESERVE_RELEASED" 
+  | "CLOSED" 
+  | "NO_ACCEPTABLE_OFFER" 
+  | "DEFAULTED" 
+  | "DISPUTED";
+
+export type ProviderArchetype = "BANK" | "NBFC" | "FINTECH" | "CREDIT_FUND" | "SECTOR_SPECIALIST";
+
+export interface Customer {
+  id: string;
+  slug: string;
+  name: string;
+  taxId?: string | null;
+  industry?: string | null;
+  averageDelayDays?: number | null;
+  relationshipDurationDays?: number | null;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  faceValue: string | number;
+  currency: string;
+  invoiceDate: string;
+  dueDate: string;
+  acceptanceDate?: string | null;
+  verificationTier: VerificationTier;
+  threeWayMatched: boolean;
+  fingerprint: string;
+  customer: Customer;
+}
+
+export interface CashObligation {
+  id: string;
+  label: string;
+  amountPaise: number;
+  dueDate: string;
+}
+
+export interface CashPosition {
+  id: string;
+  asOfDate: string;
+  currentCashPaise: number;
+  cashThresholdPaise: number;
+  obligations: CashObligation[];
+}
+
+export interface ProviderSummary {
+  id: string;
+  name: string;
+  archetype: ProviderArchetype;
+  settlementDays: number;
+  reliabilityScore: string | number;
+}
+
+export interface Bid {
+  id: string;
+  opportunityId: string;
+  providerId: string;
+  annualRate: string | number; // APR e.g. 0.11
+  advanceRate: string | number; // e.g. 0.80 (80%)
+  flatFee: string | number; // e.g. 2500
+  tenorDays: number;
+  settlementDays: number; // e.g. 3
+  recourse: boolean;
+  repaymentStructure: "BULLET" | "AMORTISING" | "REVOLVING";
+  status: "ACTIVE" | "WITHDRAWN" | "EXPIRED" | "WON" | "LOST";
+  netCashToSupplier?: string | number | null;
+  effectiveAnnualCost?: string | number | null;
+  utilityScore?: string | number | null;
+  rank?: number | null;
+  gateFailures?: string[];
+  provider: ProviderSummary;
+}
+
+export interface Match {
+  id: string;
+  allocatedAmount: string | number;
+  advanceAmount: string | number;
+  discountCharge: string | number;
+  feeAmount: string | number;
+  netDisbursed: string | number;
+  reserveAmount: string | number;
+  quotedSettlementDays: number;
+  quotedDisbursalDate: string;
+  actualDisbursalDate?: string | null;
+  expectedBuyerPayment: string;
+  actualBuyerPayment?: string | null;
+  provider?: ProviderSummary;
+}
+
+export interface Opportunity {
+  id: string;
+  orgId: string;
+  status: OpportunityStatus;
+  requestedAmount: string | number;
+  tenorDays: number;
+  riskGrade?: string | null;
+  probabilityOfDefault?: string | number | null;
+  expectedDilutionPct?: string | number | null;
+  sufficiencyFloor?: string | number | null;
+  timingDeadline?: string | null;
+  drivingObligation?: string | null;
+  urgencyWeight?: string | number | null;
+  createdAt: string;
+  invoice: Invoice;
+  cashPosition?: CashPosition | null;
+  bids: Bid[];
+  match?: Match | null;
+}
+
+export interface CapitalProviderDetail {
+  id: string;
+  orgId: string;
+  name: string;
+  archetype: ProviderArchetype;
+  costOfFunds: string | number;
+  hurdleRate: string | number;
+  totalLiquidity: string | number;
+  availableLiquidity: string | number;
+  minTicket: string | number;
+  maxTicket: string | number;
+  minTenorDays: number;
+  maxTenorDays: number;
+  riskAppetiteFloor: string;
+  concentrationLimitPct: string | number;
+  settlementDays: number;
+  sectorFocus: string[];
+  reliabilityScore: string | number;
+  bids?: Array<{
+    id: string;
+    opportunityId: string;
+    annualRate: string | number;
+    advanceRate: string | number;
+    status: string;
+    opportunity?: {
+      id: string;
+      status: string;
+      requestedAmount: string | number;
+    };
+  }>;
+}
+
+// ------------------------------------------------------------- Formatters
+export function formatINR(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return "₹0";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(num)) return "₹0";
+  return "₹" + Math.round(num).toLocaleString("en-IN");
+}
+
+export function formatINRDecimal(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return "₹0.00";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(num)) return "₹0.00";
+  return "₹" + num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function formatPercent(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return "0.0%";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(num)) return "0.0%";
+  return (num * 100).toFixed(1) + "%";
+}
+
+// ------------------------------------------------------------- Client-side Pareto Fallback Recalibration
+export interface ComputedDeal {
+  bid: Bid;
+  faceValue: number;
+  netCashToday: number;
+  discountCharge: number;
+  flatFee: number;
+  totalCost: number;
+  effectiveApr: number;
+  reserveAmount: number;
+  score: number;
+  speedBadge: string;
+  gateFailures: string[];
+  isDisqualified: boolean;
+}
+
+export function computeDealMetrics(
+  bid: Bid,
+  faceValue: number,
+  urgencyWeight: number = 0.5,
+  sufficiencyFloor?: number,
+  timingDeadlineDays?: number
+): ComputedDeal {
+  const advanceRate = typeof bid.advanceRate === "string" ? parseFloat(bid.advanceRate) : bid.advanceRate;
+  const annualRate = typeof bid.annualRate === "string" ? parseFloat(bid.annualRate) : bid.annualRate;
+  const flatFee = typeof bid.flatFee === "string" ? parseFloat(bid.flatFee) : bid.flatFee;
+  const tenor = bid.tenorDays || 45;
+
+  const advanceCash = faceValue * advanceRate;
+  const daysFraction = tenor / 365.0;
+  const discountCharge = advanceCash * annualRate * daysFraction;
+  const totalCost = discountCharge + flatFee;
+  const netCashToday = advanceCash - discountCharge - flatFee;
+  const reserveAmount = faceValue - advanceCash;
+  const effectiveApr = advanceCash > 0 ? (totalCost / advanceCash) * (365.0 / tenor) : 0;
+
+  // Check gate failures
+  const gateFailures: string[] = [...(bid.gateFailures || [])];
+  if (sufficiencyFloor && netCashToday < sufficiencyFloor && !gateFailures.includes("Fails Sufficiency Floor")) {
+    gateFailures.push("Fails Sufficiency Floor");
+  }
+  if (timingDeadlineDays !== undefined && bid.settlementDays > timingDeadlineDays && !gateFailures.includes("Misses Timing Deadline")) {
+    gateFailures.push("Misses Timing Deadline");
+  }
+
+  // Multi-Attribute Utility Score
+  const costWeight = 1.0 - urgencyWeight;
+  const advanceScore = Math.min(1, Math.max(0, (advanceRate - 0.7) / 0.3));
+  const costScore = Math.min(1, Math.max(0, (0.20 - annualRate) / 0.12));
+  const speedScore = Math.min(1, Math.max(0, (4 - bid.settlementDays) / 4));
+
+  let score = urgencyWeight * (0.6 * speedScore + 0.4 * advanceScore) + costWeight * costScore;
+  if (gateFailures.length > 0) {
+    score *= 0.3; // heavily penalize disqualified offers
+  }
+
+  let speedBadge = "⚡ Instant (T+0)";
+  if (bid.settlementDays === 1) speedBadge = "⚡ 24 Hours (T+1)";
+  else if (bid.settlementDays === 2) speedBadge = "⏳ 48 Hours (T+2)";
+  else if (bid.settlementDays >= 3) speedBadge = `⏳ ${bid.settlementDays} Days (T+${bid.settlementDays})`;
+
+  return {
+    bid,
+    faceValue,
+    netCashToday: bid.netCashToSupplier ? Number(bid.netCashToSupplier) : netCashToday,
+    discountCharge,
+    flatFee,
+    totalCost,
+    effectiveApr: bid.effectiveAnnualCost ? Number(bid.effectiveAnnualCost) : effectiveApr,
+    reserveAmount,
+    score: bid.utilityScore ? Number(bid.utilityScore) : score,
+    speedBadge,
+    gateFailures,
+    isDisqualified: gateFailures.length > 0
+  };
+}
+
+// ------------------------------------------------------------- Fallback Seed Mock Data (INR)
+export const FALLBACK_OPPORTUNITY: Opportunity = {
+  id: "opp-seed-001",
+  orgId: "org-vertex",
+  status: "AUCTION_LIVE",
+  requestedAmount: "1000000.00",
+  tenorDays: 45,
+  riskGrade: "A",
+  probabilityOfDefault: "0.021000",
+  expectedDilutionPct: "0.005000",
+  sufficiencyFloor: "806072.84",
+  timingDeadline: "2026-08-30T12:00:00.000Z",
+  drivingObligation: "September payroll (₹9.0L) + Kalyani Steel (₹46k)",
+  urgencyWeight: "0.450000",
+  createdAt: new Date().toISOString(),
+  invoice: {
+    id: "inv-seed-001",
+    invoiceNumber: "INV-2026-0801",
+    faceValue: "1000000.00",
+    currency: "INR",
+    invoiceDate: "2026-08-23T00:00:00.000Z",
+    dueDate: "2026-10-07T00:00:00.000Z",
+    acceptanceDate: "2026-08-25T00:00:00.000Z",
+    verificationTier: "BUYER_ACCEPTED",
+    threeWayMatched: true,
+    fingerprint: "0x7a8b9c...e102",
+    customer: {
+      id: "cust-001",
+      slug: "bharat-auto",
+      name: "Bharat Auto Ltd",
+      taxId: "27AAACB1111B1Z6",
+      industry: "auto-components",
+      averageDelayDays: 4.2,
+      relationshipDurationDays: 1460
+    }
+  },
+  cashPosition: {
+    id: "cp-001",
+    asOfDate: new Date().toISOString(),
+    currentCashPaise: 0,
+    cashThresholdPaise: 10000000,
+    obligations: [
+      {
+        id: "ob-1",
+        label: "September payroll",
+        amountPaise: 90000000,
+        dueDate: "2026-08-30T00:00:00.000Z"
+      },
+      {
+        id: "ob-2",
+        label: "Kalyani Steel invoice payable",
+        amountPaise: 4607284,
+        dueDate: "2026-08-31T00:00:00.000Z"
+      }
+    ]
+  },
+  bids: [
+    {
+      id: "bid-rapidfin",
+      opportunityId: "opp-seed-001",
+      providerId: "prov-rapidfin",
+      annualRate: "0.135000",
+      advanceRate: "0.950000",
+      flatFee: "0.00",
+      tenorDays: 45,
+      settlementDays: 0,
+      recourse: false,
+      repaymentStructure: "BULLET",
+      status: "ACTIVE",
+      netCashToSupplier: "934171.23",
+      effectiveAnnualCost: "0.142105",
+      utilityScore: "0.910000",
+      rank: 1,
+      gateFailures: [],
+      provider: {
+        id: "prov-rapidfin",
+        name: "Rapidfin",
+        archetype: "FINTECH",
+        settlementDays: 0,
+        reliabilityScore: "1.000000"
+      }
+    },
+    {
+      id: "bid-kaveri",
+      opportunityId: "opp-seed-001",
+      providerId: "prov-kaveri",
+      annualRate: "0.122000",
+      advanceRate: "0.880000",
+      flatFee: "1000.00",
+      tenorDays: 45,
+      settlementDays: 1,
+      recourse: true,
+      repaymentStructure: "BULLET",
+      status: "ACTIVE",
+      netCashToSupplier: "865770.96",
+      effectiveAnnualCost: "0.141527",
+      utilityScore: "0.780000",
+      rank: 2,
+      gateFailures: [],
+      provider: {
+        id: "prov-kaveri",
+        name: "Kaveri Capital (NBFC)",
+        archetype: "NBFC",
+        settlementDays: 1,
+        reliabilityScore: "1.000000"
+      }
+    },
+    {
+      id: "bid-meridian",
+      opportunityId: "opp-seed-001",
+      providerId: "prov-meridian",
+      annualRate: "0.110000",
+      advanceRate: "0.800000",
+      flatFee: "2500.00",
+      tenorDays: 45,
+      settlementDays: 3,
+      recourse: true,
+      repaymentStructure: "BULLET",
+      status: "ACTIVE",
+      netCashToSupplier: "786643.84",
+      effectiveAnnualCost: "0.140871",
+      utilityScore: "0.320000",
+      rank: 3,
+      gateFailures: ["Fails Sufficiency Floor (₹7.86L < ₹8.06L)", "Misses Timing Deadline (T+3 > 2 days)"],
+      provider: {
+        id: "prov-meridian",
+        name: "Meridian Bank",
+        archetype: "BANK",
+        settlementDays: 3,
+        reliabilityScore: "1.000000"
+      }
+    }
+  ]
+};
+
+export const FALLBACK_PROVIDER_DETAIL: CapitalProviderDetail = {
+  id: "prov-kaveri",
+  orgId: "org-kaveri",
+  name: "Kaveri Capital (NBFC)",
+  archetype: "NBFC",
+  costOfFunds: "0.105000",
+  hurdleRate: "0.130000",
+  totalLiquidity: "120000000.00",
+  availableLiquidity: "119120000.00",
+  minTicket: "200000.00",
+  maxTicket: "15000000.00",
+  minTenorDays: 15,
+  maxTenorDays: 90,
+  riskAppetiteFloor: "C",
+  concentrationLimitPct: "0.250000",
+  settlementDays: 1,
+  sectorFocus: ["auto-components", "textiles", "engineering"],
+  reliabilityScore: "1.000000",
+  bids: [
+    {
+      id: "bid-k1",
+      opportunityId: "opp-seed-001",
+      annualRate: "0.122000",
+      advanceRate: "0.880000",
+      status: "ACTIVE",
+      opportunity: {
+        id: "opp-seed-001",
+        status: "AUCTION_LIVE",
+        requestedAmount: "1000000.00"
+      }
+    }
+  ]
+};
