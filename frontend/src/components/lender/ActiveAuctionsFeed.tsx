@@ -22,59 +22,16 @@ export interface LiveAuctionItem {
   };
 }
 
-const DEFAULT_LIVE_AUCTIONS: LiveAuctionItem[] = [
-  {
-    id: "opp-seed-001",
-    invoiceNumber: "INV-2026-0801",
-    buyerName: "Bharat Auto Ltd",
-    sector: "auto-components",
-    faceValue: "1000000.00",
-    tenorDays: 45,
-    riskGrade: "A",
-    verificationTier: "BUYER_ACCEPTED",
-    status: "AUCTION_LIVE",
-    myAgentBid: {
-      advanceRatePct: 88,
-      annualAprPct: 12.2,
-      status: "SUBMITTED",
-      reason: "Passed risk floor A and sector capacity check (80%)",
-    },
-  },
-  {
-    id: "opp-seed-002",
-    invoiceNumber: "INV-2026-0802",
-    buyerName: "Sundaram Textiles Ltd",
-    sector: "textiles",
-    faceValue: "450000.00",
-    tenorDays: 60,
-    riskGrade: "C",
-    verificationTier: "LEDGER_VERIFIED",
-    status: "AUCTION_LIVE",
-    myAgentBid: {
-      advanceRatePct: 90,
-      annualAprPct: 12.8,
-      status: "ACCEPTED",
-      reason: "Winning allocation selected on Day 0",
-    },
-  },
-  {
-    id: "opp-seed-003",
-    invoiceNumber: "INV-2026-0803",
-    buyerName: "Orion Retail Pvt Ltd",
-    sector: "retail",
-    faceValue: "2200000.00",
-    tenorDays: 30,
-    riskGrade: "E",
-    verificationTier: "SUPPLIER_ASSERTED",
-    status: "AUCTION_LIVE",
-    myAgentBid: {
-      advanceRatePct: 0,
-      annualAprPct: 0,
-      status: "DECLINED",
-      reason: "Fails risk floor B and unverified tier",
-    },
-  },
-];
+/**
+ * Empty by default.
+ *
+ * This previously held three fabricated auctions, and the live page passed
+ * `undefined` whenever the real fetch came back empty — so an outage or an
+ * unseeded database rendered a busy, convincing marketplace that did not exist.
+ * An empty feed is the honest answer, and the count badge above already reads
+ * "0 Invoices In Market" without further changes.
+ */
+const DEFAULT_LIVE_AUCTIONS: LiveAuctionItem[] = [];
 
 interface ActiveAuctionsFeedProps {
   auctions?: LiveAuctionItem[];

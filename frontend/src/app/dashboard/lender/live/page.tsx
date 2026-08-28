@@ -13,7 +13,7 @@ export default function LenderLiveDealStreamPage() {
   useEffect(() => {
     async function load() {
       const oppsRes = await fetchOpportunities();
-      if (oppsRes.opportunities && oppsRes.opportunities.length > 0) {
+      {
         const items: LiveAuctionItem[] = oppsRes.opportunities.map((o) => {
           let statusText: "SUBMITTED" | "ACCEPTED" | "DECLINED" = "SUBMITTED";
           let reasonText = "Passed risk floor and sector concentration check";
@@ -86,7 +86,7 @@ export default function LenderLiveDealStreamPage() {
       </div>
 
       {/* 1. Active Auctions Feed */}
-      <ActiveAuctionsFeed auctions={auctions.length > 0 ? auctions : undefined} />
+      <ActiveAuctionsFeed auctions={auctions} />
 
       {/* 2. Enclosed Collapsible Terminal Console */}
       <div className="pt-4">

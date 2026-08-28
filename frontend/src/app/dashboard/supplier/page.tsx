@@ -7,41 +7,11 @@ import { DbStatusBanner } from "@/components/ui/DbStatusBanner";
 import { Store, Plus, Search, Filter, ShieldCheck, ArrowRight } from "lucide-react";
 import { formatINR } from "@/lib/scoring";
 
-const INITIAL_INVOICES: InvoiceRowItem[] = [
-  {
-    id: "inv-seed-001",
-    invoiceNumber: "INV-2026-0801",
-    buyerName: "Bharat Auto Ltd",
-    industry: "Auto-Components",
-    faceValue: 1000000,
-    maturityDate: "07 Oct 2026",
-    status: "AUCTION_LIVE",
-    verificationTier: "BUYER_ACCEPTED",
-  },
-  {
-    id: "inv-seed-002",
-    invoiceNumber: "INV-2026-0802",
-    buyerName: "Sundaram Textiles Ltd",
-    industry: "Textiles",
-    faceValue: 450000,
-    maturityDate: "22 Oct 2026",
-    status: "SETTLED",
-    verificationTier: "LEDGER_VERIFIED",
-  },
-  {
-    id: "inv-seed-003",
-    invoiceNumber: "INV-2026-0803",
-    buyerName: "Orion Retail Pvt Ltd",
-    industry: "Retail",
-    faceValue: 2200000,
-    maturityDate: "22 Sep 2026",
-    status: "PENDING",
-    verificationTier: "SUPPLIER_ASSERTED",
-  },
-];
-
 export default function SupplierDashboardPage() {
-  const [invoices, setInvoices] = useState<InvoiceRowItem[]>(INITIAL_INVOICES);
+  // Empty, not INITIAL_INVOICES. Seeding state with three fabricated invoices
+  // meant a failed fetch left them on screen indistinguishable from real ones —
+  // and they persisted, because the guard below only replaces on success.
+  const [invoices, setInvoices] = useState<InvoiceRowItem[]>([]);
   const [dbHealth, setDbHealth] = useState<DbHealthResult | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
@@ -54,8 +24,8 @@ export default function SupplierDashboardPage() {
       ]);
       setDbHealth(health);
 
-      if (oppsRes.opportunities && oppsRes.opportunities.length > 0) {
-        const mapped: InvoiceRowItem[] = oppsRes.opportunities.map((o) => ({
+      {
+        const mapped: InvoiceRowItem[] = (oppsRes.opportunities ?? []).map((o) => ({
           id: o.invoice?.id || o.id,
           invoiceNumber: o.invoice?.invoiceNumber || "INV-2026",
           buyerName: o.invoice?.customer?.name || "Corporate Buyer",
