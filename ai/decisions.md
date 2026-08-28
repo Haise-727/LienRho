@@ -83,3 +83,26 @@ entrypoint, task`) instead of hand-rolled classes. Worker steps are `@task`s; th
 is an `@entrypoint` workflow. The public class wrappers (SupplierAgent / LenderBiddingAgent /
 MarketClearingAgent) are preserved so the test suite is unchanged (15 passing). Chosen over the
 StateGraph/Graph API deliberately, for easy iteration. langgraph added to ai/requirements.txt.
+
+## D13 - Step 3: HttpMatchingClient + env flip
+Added a REAL HTTP matching client behind the existing `MatchingClient` seam (D4).
+- `HttpMatchingClient` POSTs `{opportunity_id, bids:[...]}` to the configured URL with
+  `Content-Type: application/json` and an optional `Authorization: Bearer <key>` header.
+  The POST is wrapped in a tenacity retry (`stop_after_attempt(3)`,
+  `wait_exponential_jitter(initial=0.5, max=2.0)`) on `httpx.HTTPError`.
+  NOTE: the original design used `wait_exponential(..., jitter=True)`; the installed
+  tenacity is 9.1.4, which removed that kwarg, so `wait_exponential_jitter` is used
+  (same exponential-backoff-with-jitter intent, capped at 2.0s).
+  The upstream JSON is mapped tolerantly into `MatchResult` (`simulated=False`).
+- `get_matching_client(settings)` factory selects the backend from settings:
+  `NEXUS_MATCHING_MODE=http` + `NEXUS_MATCHING_URL` set -> `HttpMatchingClient`;
+  otherwise `MockMatchingClient` (the default). `NEXUS_MATCHING_TIMEOUT` (default 5.0)
+  and `NEXUS_MATCHING_API_KEY` are also honoured.
+- `MarketClearingAgent.__init__` now accepts `matching: MatchingClient | None = None`;
+  when no client is injected, `run()` resolves the env-driven client via
+  `get_matching_client(settings)`, so existing callers (passing `MockMatchingClient`
+  explicitly) are unchanged and all prior tests stay green.
+- `httpx>=0.27` and `tenacity>=8.0` added to `ai/requirements.txt`.
+- `MatchResult` remains the internal PLACEHOLDER (issue #9 #4): the pass-through of
+  Track 2's real discriminated-union MatchResult is still deferred (issue #9 #4).
+  `HttpMatchingClient` does a best-effort map rather than a strict contract.

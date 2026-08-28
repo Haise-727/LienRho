@@ -1,11 +1,12 @@
 ﻿import pytest
 from datetime import date, timedelta
 
+import httpx
 from ai.nexus.agents import LenderBiddingAgent, MarketClearingAgent, SupplierAgent
 from ai.nexus.config import NexusSettings
-from ai.nexus.matching import MockMatchingClient
+from ai.nexus.matching import HttpMatchingClient, MockMatchingClient, get_matching_client
 from ai.nexus.providers import DEFAULT_PROVIDERS
-from ai.nexus.schemas import ClearingRequest, SupplierInput, UrgencyLevel
+from ai.nexus.schemas import ClearingRequest, LenderBid, SupplierInput, UrgencyLevel
 
 
 def _supplier(due_in_days=20, cash_ratio=0.9):
@@ -77,3 +78,50 @@ def test_llm_path_uses_returned_text(monkeypatch):
     sup = _supplier()
     v = SupplierAgent().assess(sup, settings)
     assert v.rationale == "LLM-generated explanation."
+
+
+def test_get_matching_client_default_mock():
+    assert isinstance(
+        get_matching_client(NexusSettings(matching_mode="mock")), MockMatchingClient
+    )
+
+
+def test_get_matching_client_http():
+    assert isinstance(
+        get_matching_client(NexusSettings(matching_mode="http", matching_url="http://x")),
+        HttpMatchingClient,
+    )
+
+
+def test_http_matching_client_maps_response(monkeypatch):
+    class _FakeResp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "matchId": "M1",
+                "matched": True,
+                "matchedBidRef": "P",
+                "score": 0.9,
+                "notes": "ok",
+            }
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _FakeResp())
+
+    bid = LenderBid.model_validate({
+        "providerId": "P",
+        "providerName": "Lender P",
+        "advanceRate": 0.8,
+        "apr": 0.12,
+        "feesPaise": 250000,
+        "disbursalLatencyHours": 24,
+        "tenorDays": 45,
+        "recourse": True,
+        "confidence": 0.9,
+    })
+    result = HttpMatchingClient("http://x").match("O1", [bid])
+    assert result.matched is True
+    assert result.matched_bid_ref == "P"
+    assert result.score == 0.9
+    assert result.simulated is False

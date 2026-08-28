@@ -15,6 +15,11 @@ class NexusSettings(BaseSettings):
     llm_base_url: str | None = None
     llm_api_key: str | None = None
 
+    matching_mode: str = "mock"  # "mock" | "http"
+    matching_url: str | None = None
+    matching_timeout: float = 5.0
+    matching_api_key: str | None = None
+
 
 def get_settings() -> NexusSettings:
     return NexusSettings()

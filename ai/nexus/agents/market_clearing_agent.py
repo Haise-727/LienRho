@@ -2,7 +2,7 @@
 from ai.nexus.agents.supplier_agent import supplier_task
 from ai.nexus.config import NexusSettings
 from ai.nexus import llm
-from ai.nexus.matching import MatchingClient
+from ai.nexus.matching import MatchingClient, get_matching_client
 from ai.nexus.prompts import CLEARING_SYSTEM_PROMPT
 from ai.nexus.providers import DEFAULT_PROVIDERS, ProviderProfile
 from ai.nexus.schemas import ClearingRequest, ClearingResult
@@ -51,17 +51,18 @@ def clearing_workflow(payload: dict) -> ClearingResult:
 
 
 class MarketClearingAgent:
-    def __init__(self, matching: MatchingClient, providers: list[ProviderProfile] | None = None):
+    def __init__(self, matching: MatchingClient | None = None, providers: list[ProviderProfile] | None = None):
         self._matching = matching
         self._providers = DEFAULT_PROVIDERS if providers is None else providers
         self._wf = clearing_workflow
 
     def run(self, request: ClearingRequest, settings: NexusSettings | None = None) -> ClearingResult:
         settings = settings or NexusSettings()
+        matching = self._matching or get_matching_client(settings)
         return self._wf.invoke(
             {
                 "request": request,
-                "matching": self._matching,
+                "matching": matching,
                 "providers": self._providers,
                 "settings": settings,
             }
