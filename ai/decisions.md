@@ -76,3 +76,10 @@ financials (D5). The single LLM seam is `ai.nexus.llm.complete` (lazy litellm im
 so ai/ stays dependency-light). MatchingClient is an ABC; MockMatchingClient ranks bids
 by effective cost until Step 3 wires HttpMatchingClient. Provider terms live as frozen
 profiles in `ai/nexus/providers.py`; flat fees mirror docs/01's Rs 2,500 example.
+
+## D12 - Step 2 agents rewritten in LangGraph (functional API)
+The three NexusX agents now use LangGraph's FUNCTIONAL API (`from langgraph.func import
+entrypoint, task`) instead of hand-rolled classes. Worker steps are `@task`s; the supervisor
+is an `@entrypoint` workflow. The public class wrappers (SupplierAgent / LenderBiddingAgent /
+MarketClearingAgent) are preserved so the test suite is unchanged (15 passing). Chosen over the
+StateGraph/Graph API deliberately, for easy iteration. langgraph added to ai/requirements.txt.

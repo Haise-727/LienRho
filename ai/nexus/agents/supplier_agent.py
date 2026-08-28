@@ -4,6 +4,7 @@ from ai.nexus.config import NexusSettings
 from ai.nexus import llm
 from ai.nexus.prompts import SUPPLIER_SYSTEM_PROMPT
 from ai.nexus.schemas import SupplierInput, UrgencyLevel, UrgencyVerdict
+from langgraph.func import entrypoint, task
 
 
 def _days_until(d: date) -> int:
@@ -36,31 +37,38 @@ def _level_from_factor(factor: float) -> UrgencyLevel:
     return UrgencyLevel.NONE
 
 
-class SupplierAgent:
-    def assess(self, supplier: SupplierInput, settings: NexusSettings | None = None) -> UrgencyVerdict:
-        settings = settings or NexusSettings()
-        factor = _deterministic_factor(supplier)
-        level = _level_from_factor(factor)
-        rationale = self._rationale(supplier, level, factor, settings)
-        return UrgencyVerdict(
-            level=level,
-            factor=factor,
-            rationale=rationale,
-            simulated=not settings.llm_enabled,
-            confidence=0.9,
-        )
-
-    def _rationale(self, supplier, level, factor, settings) -> str:
-        llm_text = llm.complete(
-            settings,
-            SUPPLIER_SYSTEM_PROMPT,
-            f"Supplier {supplier.supplier_id}, invoice {supplier.invoice_id}, "
-            f"urgency level {level.value}, factor {factor}.",
-        )
-        if llm_text:
-            return llm_text.strip()
-        return (
+@task
+def supplier_task(supplier: SupplierInput, settings: NexusSettings) -> UrgencyVerdict:
+    factor = _deterministic_factor(supplier)
+    level = _level_from_factor(factor)
+    llm_text = llm.complete(
+        settings,
+        SUPPLIER_SYSTEM_PROMPT,
+        f"Supplier {supplier.supplier_id}, invoice {supplier.invoice_id}, "
+        f"urgency level {level.value}, factor {factor}.",
+    )
+    if llm_text:
+        rationale = llm_text.strip()
+    else:
+        rationale = (
             f"Cash need is {supplier.cash_need_paise / supplier.invoice_amount_paise:.0%} "
             f"of invoice; due in {_days_until(supplier.due_date)} days -> {level.value} urgency."
         )
+    return UrgencyVerdict(
+        level=level,
+        factor=factor,
+        rationale=rationale,
+        simulated=not settings.llm_enabled,
+        confidence=0.9,
+    )
 
+
+@entrypoint()
+def supplier_workflow(payload: dict) -> UrgencyVerdict:
+    return supplier_task(payload["supplier"], payload["settings"]).result()
+
+
+class SupplierAgent:
+    def assess(self, supplier: SupplierInput, settings: NexusSettings | None = None) -> UrgencyVerdict:
+        settings = settings or NexusSettings()
+        return supplier_workflow.invoke({"supplier": supplier, "settings": settings})
