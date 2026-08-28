@@ -1,21 +1,23 @@
 # LienRho — AWS Production Infrastructure (Issue #34)
 
-> Planned architecture for moving LienRho from local dev → AWS production.
+> Implementation plan + status for deploying LienRho to AWS.
 > Spec: `docs/aws_migration_plan.md` · Ticket: [#34](https://github.com/Haise-727/LienRho/issues/34)
+> **Decision:** We are **ditching Supabase** entirely, so #34 (Fargate + Aurora) is the
+> correct target. #30 (Amplify + Supabase) is invalid — it depends on Supabase Pooler + auth.
 
-## Architecture Diagram
+## Architecture
 
 ```mermaid
 flowchart TB
-    U["User / Browser"] -->|"HTTPS (443)"| ALB["Application Load Balancer\n(public subnet)"]
+    U["User / Browser"] -->|"HTTP 80"| ALB["Application Load Balancer\n(public subnet)"]
 
-    subgraph VPC["VPC (private by default)"]
-        ALB --> FARGATE["ECS Fargate\nNext.js standalone :3000\n(public subnet, behind ALB)"]
+    subgraph VPC["VPC (10.0.0.0/16)"]
+        ALB --> FARGATE["ECS Fargate\nNext.js standalone :3000\n(private subnet, NAT egress)"]
 
         subgraph PRIV["Private Subnets"]
-            AURORA["Amazon Aurora Serverless v2\nPostgreSQL :5432\nStitch Ledger / Offers / Bids"]
-            REDIS["ElastiCache (Redis)\n:6379\nSETNX concurrency locks"]
-            SEC["Secrets Manager\nDATABASE_URL / REDIS_URL /\nELEVENLABS_API_KEY"]
+            AURORA["Aurora Serverless v2\nPostgreSQL :5432\nStitch Ledger"]
+            REDIS["ElastiCache Redis\n:6379\nSETNX locks"]
+            SEC["Secrets Manager\nDATABASE_URL / REDIS_URL /\nAPI keys"]
         end
 
         FARGATE -->|"5432 (SG-scoped)"| AURORA
@@ -23,43 +25,52 @@ flowchart TB
         FARGATE -->|"reads at boot"| SEC
     end
 
-    ECR["ECR repo: lienrho-web"] -.->|"image pull"| FARGATE
-
-    GH["GitHub Actions\npush to main"] -->|"docker build + push"| ECR
-    GH -->|"prisma migrate deploy"| AURORA
-    GH -->|"force-new-deployment"| FARGATE
+    ECR["ECR: lienrho-web"] -.->|"image pull"| FARGATE
+    NAT["NAT Gateway"] -->|"egress"| IGW["Internet (ECR, Secrets)"]
 ```
 
-## What each box is (plain English)
+Security: Aurora + ElastiCache are private; only the Fargate SG can reach them.
+Fargate has no public IP — it egresses via a single NAT Gateway.
 
-| Component | AWS service | Job |
-|---|---|---|
-| **ALB** | Application Load Balancer | The public HTTPS front door. Only thing users touch. |
-| **ECS Fargate** | Serverless containers | Runs the Next.js app. No servers to babysit. Scales by task count. |
-| **Aurora Serverless v2** | Managed PostgreSQL | The database. Scales to 0 when idle, up under load. |
-| **ElastiCache** | Managed Redis | Distributed locks for the CodeCrafters Pareto matcher. |
-| **Secrets Manager** | Secure config store | Holds DB/Redis/API keys — never baked into the image. |
-| **ECR** | Container registry | Where the built Docker image lives. |
-| **GitHub Actions** | CI/CD | On merge to `main`: build → push → migrate → redeploy. |
+## Files (this branch)
 
-## Security model
-- Aurora + ElastiCache live in **private subnets** → not publicly reachable.
-- Security Groups only allow `5432`/`6379` traffic **from the Fargate SG**.
-- Secrets injected at runtime from Secrets Manager, not in the repo or image.
+| Path | What |
+|---|---|
+| `infra/versions.tf` | OpenTofu + AWS provider (~> 5.83) config |
+| `infra/variables.tf` | Region, CIDRs, DB name, API-key vars |
+| `infra/vpc.tf` | VPC, 2 AZs, public/private subnets, IGW, NAT, route tables |
+| `infra/ecr.tf` | ECR repo `lienrho-web` + lifecycle policy |
+| `infra/aurora.tf` | Aurora Serverless v2 cluster + `db.serverless` instance |
+| `infra/elasticache.tf` | Redis OSS `cache.t4g.micro` |
+| `infra/iam.tf` | ECS execution + task IAM roles |
+| `infra/secrets.tf` | Secrets Manager secret (DB/Redis/API URLs) |
+| `infra/ecs.tf` | ECS cluster, ALB, target group, Fargate service, task defs (web + migrate) |
+| `infra/outputs.tf` | ALB DNS, ECR URL, endpoints |
+| `Dockerfile` | Multi-stage build of `frontend/` as Next.js standalone |
+| `frontend/next.config.ts` | `output: "standalone"` enabled |
+| `.github/workflows/deploy.yml` | Build → ECR → `prisma migrate deploy` (in-VPC) → Fargate redeploy |
 
-## CI/CD flow (what happens on every `main` push)
+## How it deploys (CI/CD)
+
 ```mermaid
 flowchart LR
-    A["push to main"] --> B["lint + tsc --noEmit (gate)"]
-    B --> C["docker build (standalone)"]
-    C --> D["push to ECR"]
-    D --> E["prisma migrate deploy (Aurora)"]
-    E --> F["ecs update-service --force-new-deployment"]
-    F --> G["live via ALB URL"]
+    A["push to main"] --> B["docker build (standalone)"]
+    B --> C["push to ECR"]
+    C --> D["ecs run-task: prisma migrate deploy\n(inside VPC → reaches Aurora)"]
+    D --> E["ecs update-service --force-new-deployment"]
+    E --> F["live via ALB DNS"]
 ```
 
-## Open decisions (ask @Haise-727 / team)
-1. **#34 (Fargate + Aurora) vs #30 (Amplify + Supabase)** — these contradict. #34 wins per the migration plan; close #30 or re-scope it.
-2. **Region** — e.g. `ap-south-1` / `us-east-1`.
-3. **Secrets** — Secrets Manager (recommended) vs SSM.
-4. **Cost** — t4g.micro + Aurora Serverless v2 is a few $/day for the demo.
+Migrations run as a **one-shot Fargate task inside the VPC** so the private
+Aurora is reachable — no need to expose the DB to the internet.
+
+## Status
+- [x] OpenTofu config written and `tofu validate` passes (40 resources planned).
+- [ ] `tofu apply` (provisions real AWS — see cost note).
+- [ ] `tofu output` → wire ALB DNS / secrets into GitHub repo secrets.
+- [ ] Auth replacement for Supabase (Cognito recommended) — separate task.
+
+## Cost note (hackathon)
+NAT Gateway (~$32/mo) + Aurora Serverless v2 (scales to 0.5 ACU) + ElastiCache
+t4g.micro + Fargate + ALB. Expect a few $/day while running; `tofu destroy`
+after the demo to stop billing.
