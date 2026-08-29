@@ -38,29 +38,55 @@ export async function GET(request: Request) {
   const email = data.user.email.toLowerCase();
   const allowed = await prisma.user.findUnique({ where: { email } });
 
-  if (!allowed) {
-    // Authenticated, but not a member of any organization here. Sign out so
-    // the session does not survive the redirect — otherwise the proxy would
-    // see a valid Supabase cookie and let them past the login page into a
-    // dashboard that has nothing to show them.
-    await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/login?error=not_authorized", url.origin));
+  // Not on the allowlist? Admit them as a read-only viewer rather than
+  // turning them away.
+  //
+  // The tension this resolves: Google answers "who are you", but the
+  // marketplace also needs "what may you trade as" — and nobody should be able
+  // to self-declare as a bank. Attaching a stranger to an existing provider
+  // would hand them that provider's private mandate and its rivals' bids.
+  //
+  // So they join the platform organisation with the MEMBER role, which the
+  // schema already defines as read-only. They can see the market clear, read
+  // the ledger and follow the reasoning; they cannot act for anyone. Every
+  // route that mutates state checks for OWNER (see requireOwner in lib/auth).
+  let account = allowed;
+  if (!account) {
+    const platform = await prisma.organization.findFirst({
+      where: { type: "PLATFORM" },
+      select: { id: true },
+    });
+    if (!platform) {
+      // No platform org means an unseeded database. Refuse rather than guess
+      // at which organisation a stranger belongs to.
+      await supabase.auth.signOut();
+      return NextResponse.redirect(new URL("/login?error=not_authorized", url.origin));
+    }
+    account = await prisma.user.create({
+      data: {
+        email,
+        displayName: (data.user.user_metadata?.full_name as string | undefined) ?? null,
+        avatarUrl: (data.user.user_metadata?.avatar_url as string | undefined) ?? null,
+        orgId: platform.id,
+        role: "MEMBER",
+      },
+    });
   }
 
   // Bind the Supabase identity to the allowlist row on first sign-in. Later
   // sessions match on this UUID rather than the email, so a Google account
   // that changes its primary address keeps working.
   await prisma.user.update({
-    where: { id: allowed.id },
+    where: { id: account.id },
     data: {
       supabaseUserId: data.user.id,
       lastSeenAt: new Date(),
       displayName:
-        allowed.displayName ??
+        account.displayName ??
         (data.user.user_metadata?.full_name as string | undefined) ??
         null,
       avatarUrl:
-        allowed.avatarUrl ??
+        account.avatarUrl ??
         (data.user.user_metadata?.avatar_url as string | undefined) ??
         null,
     },

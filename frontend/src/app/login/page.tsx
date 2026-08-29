@@ -17,8 +17,10 @@ import { createClient } from "@/lib/supabase/client";
 /** Messages are deliberately vague about *why* — see below. */
 const ERRORS: Record<string, string> = {
   unauthorized: "Please sign in to continue.",
+  // Only reachable now when the database has no platform organisation to
+  // attach a viewer to, i.e. an unseeded deployment.
   not_authorized:
-    "That Google account isn't registered to an organisation on LienRho. Ask your administrator to add it.",
+    "This deployment isn't set up yet. Ask an administrator to seed it.",
   oauth_failed: "Google sign-in was cancelled or failed. Please try again.",
   missing_code: "Sign-in didn't complete. Please try again.",
   exchange_failed: "Sign-in didn't complete. Please try again.",
@@ -120,8 +122,9 @@ function LoginCard() {
       <div className="mt-6 flex items-start gap-2 text-[11px] leading-relaxed text-neutral-500">
         <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" />
         <span>
-          Access is by invitation. Signing in with Google proves who you are; an
-          administrator decides which organisation you may act for.
+          Anyone may sign in to look around. Signing in with Google proves who you
+          are; only an administrator can decide which organisation you may act
+          for — so new accounts start read-only.
         </span>
       </div>
     </motion.div>

@@ -20,6 +20,7 @@
 
 import { prisma } from "@/lib/db";
 import { verificationCallScript } from "@/lib/voice/script";
+import { requireOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -70,6 +71,10 @@ export async function GET(request: Request) {
 
 /** POST — the buyer confirmed. Upgrade the tier. */
 export async function POST(request: Request) {
+  // Viewers may read the marketplace; only an owner may change it.
+  const auth = await requireOwner();
+  if (auth.response) return auth.response;
+
   let invoiceId: string;
   try {
     const body = await request.json();

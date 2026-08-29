@@ -4,8 +4,13 @@ import { prisma } from "@/lib/db";
 import { generateObject } from "ai";
 import { siliconFlow } from "@/lib/ai/siliconflow";
 import { z } from "zod";
+import { requireOwner } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  // Viewers may read the marketplace; only an owner may change it.
+  const auth = await requireOwner();
+  if (auth.response) return auth.response;
+
   const token = await getSessionToken();
   if (!token) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });

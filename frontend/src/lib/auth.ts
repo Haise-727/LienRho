@@ -54,6 +54,40 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   };
 }
 
+/**
+ * For route handlers that CHANGE something: the user, or a response to return.
+ *
+ * Anyone signing in with Google is admitted as a read-only MEMBER of the
+ * platform org (see the auth callback), so "is there a session" is no longer
+ * the same question as "may this person act". Every mutating route has to ask
+ * the second one, or open sign-in quietly becomes open write access.
+ *
+ * 403 rather than 401: they are authenticated, just not permitted — and a 401
+ * would send the client off to re-authenticate, which changes nothing.
+ */
+export async function requireOwner(): Promise<
+  { user: SessionUser; response?: never } | { user?: never; response: Response }
+> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { response: Response.json({ error: "Not authenticated" }, { status: 401 }) };
+  }
+  if (user.role !== "OWNER") {
+    return {
+      response: Response.json(
+        {
+          error: "read_only",
+          message:
+            "You are signed in as a viewer. Viewers can read the marketplace and the ledger, " +
+            "but only a member of the owning organisation can change anything.",
+        },
+        { status: 403 },
+      ),
+    };
+  }
+  return { user };
+}
+
 /** For route handlers: the user, or a 401 to return. */
 export async function requireUser(): Promise<
   { user: SessionUser; response?: never } | { user?: never; response: Response }
