@@ -38,23 +38,70 @@ export interface Plugin {
   skills?: Skill[];
 }
 
-export interface AgentInput {
-  question: string;
-  opportunityId?: string;
-  /** Groups conversation turns so the agent remembers prior context. */
-  sessionId?: string;
+export type AgentType = "treasury" | "audit";
+
+export interface AgentApproval {
+  /** "allow" approves a held write action (allow-once or allow-always). */
+  decision: "allow" | "deny";
+  /** The tool call id / name being approved, for UI correlation. */
+  tool?: string;
 }
 
-export interface ToolCallRecord {
+export interface AgentInput {
+  question: string;
+  /** Which agent personality to use. */
+  agentType?: AgentType;
+  opportunityId?: string;
+  /** Conversation thread id. Groups turns so the agent remembers prior context
+   *  and the cockpit can reload history. Falls back to `sessionId` for compat. */
+  threadId?: string;
+  /** Backwards-compatible alias for `threadId`. */
+  sessionId?: string;
+  /** Max tool-calling steps before the agent stops (default per-agent). */
+  maxSteps?: number;
+  /** Human-in-the-loop response for a pending write action. */
+  approval?: AgentApproval;
+}
+
+/** A tool call as shown to the user: summarized + redacted, never the raw dump. */
+export interface SanitizedToolCall {
+  tool: string;
+  ok: boolean;
+  durationMs?: number;
+  /** One-line human summary (e.g. "Listed 5 live auctions"). */
+  summary: string;
+  /** True when the underlying result was truncated for display. */
+  clipped: boolean;
+  /** Redacted preview of args/result (safe to log/render), truncated. */
+  preview?: string;
+}
+
+export interface ToolCallDetail {
   tool: string;
   args: unknown;
+  result?: unknown;
   ok: boolean;
+  durationMs?: number;
+}
+
+export interface ApprovalRequest {
+  tool: string;
+  args: unknown;
+  threadId: string;
 }
 
 export interface AgentResult {
   answer: string;
   intent: "agent";
-  toolCalls: ToolCallRecord[];
+  agentType: AgentType;
+  toolCalls: SanitizedToolCall[];
+  /** Thread this turn belongs to (created if the caller passed none). */
+  threadId: string;
+  /** Correlation id for server-side logs (set AGENT_TRACE=1 to see them). */
+  traceId?: string;
+  /** Number of model steps (tool-calling rounds) the turn took. */
+  steps?: number;
+  approvalRequest?: ApprovalRequest;
 }
 
 export type { ModelMessage };

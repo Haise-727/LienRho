@@ -672,11 +672,51 @@ model EscrowLock {
   @@index([expiresAt])
 }
 
-/// Durable agent memory for the CFO Voice Cockpit (#29).
+/// A CFO Voice Cockpit conversation thread (#29).
 ///
-/// Replaces the in-process Map so conversation context survives across serverless
-/// instances and is queryable like any other table on the Supabase Postgres
-/// database. One row per message; read back in `seq` order for a session.
+/// One row per chat thread. The sliding window of recent turns lives in
+/// AgentMessage; `importantContext` is the compacted long-term memory the
+/// background worker maintains so key facts survive the window ("don't lose
+/// important context").
+model AgentThread {
+  id               String   @id @default(cuid())
+  title            String   @default("New chat")
+  /// Multi-tenant scoping. Each user (resolved from Supabase Auth when wired, or
+  /// a stable cookie/header id) sees only their own threads. Null is treated as
+  /// the shared "anonymous" bucket.
+  userId           String?
+  /// Compacted multi-line long-term memory, maintained by the cold-path worker.
+  importantContext String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  lastMessageAt    DateTime @default(now())
+
+  messages AgentMessage[]
+
+  @@index([updatedAt])
+  @@index([userId])
+}
+
+/// One message in a thread. `role` is user | assistant | tool | system.
+/// Tool messages carry a sanitized summary in `content` and a redacted preview
+/// in `meta` so the raw tool output is never stored verbatim.
+model AgentMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  seq       Int      @default(autoincrement())
+  role      String
+  kind      String   @default("msg") // "msg" | "tool" | "meta"
+  content   String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  thread AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+}
+
+/// Legacy sliding-window memory row (kept for backwards compatibility; the
+/// CFO cockpit now persists full history in AgentThread/AgentMessage).
 model AgentMemory {
   id        String   @id @default(cuid())
   sessionId String

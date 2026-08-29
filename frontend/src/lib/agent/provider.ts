@@ -26,5 +26,5 @@ export function getAgentModel(): AgentModel | null {
   if (!baseURL || !apiKey || !modelId) return null;
 
   const provider = createOpenAI({ baseURL, apiKey });
-  return { model: provider(modelId), modelId };
+  return { model: provider.chat(modelId), modelId };
 }

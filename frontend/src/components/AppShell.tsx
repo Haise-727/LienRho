@@ -7,6 +7,7 @@ import { RoleSwitcher } from "./navigation/RoleSwitcher";
 import { useUser } from "@/context/UserContext";
 import { Radio, ShieldCheck, Sparkles, User, Layers, ArrowUpRight } from "lucide-react";
 import { ElevenLabsVoiceCockpit } from "./voice/ElevenLabsVoiceCockpit";
+import { ChatLauncher } from "./voice/ChatLauncher";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -123,6 +124,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onClose={() => setIsVoiceOpen(false)}
         dealContext={`Active Account: ${user.orgName} (${role})`}
       />
+
+      {/* Floating launcher: bottom-right bot icon */}
+      <ChatLauncher open={isVoiceOpen} onToggle={() => setIsVoiceOpen((v) => !v)} />
     </div>
   );
 }

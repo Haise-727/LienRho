@@ -16,6 +16,7 @@ import {
   offerSummary,
 } from "./clearing";
 import { guardWriteAction } from "./guardrails";
+import { buildCorpus, retrieve } from "./bm25";
 
 const opportunityArg = z
   .object({ opportunityId: z.string().optional() })
@@ -171,72 +172,94 @@ export const treasuryTools = {
 
   getPortfolioExposure: tool({
     description:
-      "Return total committed capital and currently available capital across all providers. Call when asked about portfolio, exposure, liquidity, capacity, or deployable funds.",
-    inputSchema: z.object({}).optional(),
-    execute: async () => {
+      "Return total committed capital and currently available capital across all providers. The headline figures are always returned; pass `limit`/`offset` to page the per-provider breakdown rather than returning every provider.",
+    inputSchema: z
+      .object({
+        limit: z.number().int().min(1).max(20).optional().describe("max providers to list (default 8)"),
+        offset: z.number().int().min(0).optional().describe("providers to skip (default 0)"),
+      })
+      .optional(),
+    execute: async ({ limit = 8, offset = 0 } = {}) => {
       const providers = await prisma.capitalProvider.findMany({
         select: { name: true, availableLiquidity: true, totalLiquidity: true },
+        orderBy: { name: "asc" },
       });
       const total = providers.reduce((a, p) => a + Number(p.totalLiquidity), 0);
       const free = providers.reduce((a, p) => a + Number(p.availableLiquidity), 0);
+      const page = providers.slice(offset, offset + limit);
       const summary =
         `Across ${providers.length} capital providers, total committed capital is ` +
         `${rupees(total * 100)} rupees, of which ${rupees(free * 100)} rupees is ` +
-        `currently available to deploy.`;
+        `currently available to deploy` +
+        (providers.length > page.length ? ` (listing ${offset + 1}–${offset + page.length}).` : `.`);
       return {
         summary,
-        providers: providers.map((p) => ({
+        totalProviders: providers.length,
+        totalPaise: total * 100,
+        freePaise: free * 100,
+        providers: page.map((p) => ({
           name: p.name,
           availablePaise: Number(p.availableLiquidity) * 100,
           totalPaise: Number(p.totalLiquidity) * 100,
         })),
-        totalPaise: total * 100,
-        freePaise: free * 100,
       };
     },
   }),
 
   listOpportunities: tool({
     description:
-      "List live financing opportunities (invoice number, supplier, buyer, status, bid count) so the agent can name a specific subject for the other tools. Call when the user references 'the auction', 'this deal', or no specific opportunity.",
-    inputSchema: z.object({}).optional(),
-    execute: async () => {
-      const rows = await prisma.financingOpportunity.findMany({
+      "List live financing opportunities. NEVER dump the whole book — use `query` (BM25-ranked over invoice number, supplier, buyer) to find the right auction, and `limit`/`offset` to page. Prefer a specific `query` whenever the user names a supplier, buyer, or invoice number. Returns at most `limit` rows (default 8).",
+    inputSchema: z
+      .object({
+        limit: z.number().int().min(1).max(20).optional().describe("max rows to return (default 8)"),
+        offset: z.number().int().min(0).optional().describe("rows to skip (default 0)"),
+        query: z.string().optional().describe("free-text search, BM25-ranked over invoice/supplier/buyer"),
+      })
+      .optional(),
+    execute: async ({ limit = 8, offset = 0, query } = {}) => {
+      const all = await prisma.financingOpportunity.findMany({
         where: { status: "AUCTION_LIVE" },
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
           status: true,
-          invoice: {
-            select: {
-              invoiceNumber: true,
-              customer: { select: { name: true } },
-            },
-          },
+          invoice: { select: { invoiceNumber: true, customer: { select: { name: true } } } },
           org: { select: { name: true } },
           _count: { select: { bids: true } },
         },
       });
-      if (rows.length === 0)
-        return { summary: "There are no live auctions right now." };
-      return {
-        summary:
-          `There are ${rows.length} live auctions: ` +
-          rows
-            .map(
-              (r) =>
-                `${r.invoice.invoiceNumber} (supplier ${r.org.name}, buyer ${r.invoice.customer.name}, ${r._count.bids} bids)`,
-            )
-            .join("; ") +
-          ".",
-        opportunities: rows.map((r) => ({
-          id: r.id,
-          invoiceNumber: r.invoice.invoiceNumber,
-          supplier: r.org.name,
-          buyer: r.invoice.customer.name,
-          bidCount: r._count.bids,
-        })),
-      };
+      if (all.length === 0) return { summary: "There are no live auctions right now.", opportunities: [] };
+
+      let rows = all;
+      if (query && query.trim()) {
+        const corpus = buildCorpus(
+          all.map((o) => ({
+            id: o.id,
+            text: `${o.invoice.invoiceNumber} ${o.org.name} ${o.invoice.customer.name}`,
+          })),
+        );
+        const ids = new Set(retrieve(corpus, query, all.length));
+        rows = all.filter((o) => ids.has(o.id));
+      }
+      const total = rows.length;
+      const page = rows.slice(offset, offset + limit);
+      const shown = page.map((r) => ({
+        id: r.id,
+        invoiceNumber: r.invoice.invoiceNumber,
+        supplier: r.org.name,
+        buyer: r.invoice.customer.name,
+        bidCount: r._count.bids,
+      }));
+      const range =
+        total === 0 ? "" : ` — showing ${offset + 1}–${offset + page.length} of ${total}`;
+      const summary = query
+        ? `Found ${total} auction(s) matching "${query}"${range}: ` +
+          shown.map((s) => `${s.invoiceNumber} (${s.supplier} → ${s.buyer}, ${s.bidCount} bids)`).join("; ") +
+          "."
+        : `There are ${total} live auctions${range}: ` +
+          shown.map((s) => `${s.invoiceNumber} (${s.supplier} → ${s.buyer}, ${s.bidCount} bids)`).join("; ") +
+          ".";
+      return { summary, total, query: query ?? null, limit, offset, opportunities: shown };
     },
   }),
 
@@ -315,10 +338,18 @@ export const treasuryTools = {
 
   getProviderLiquidity: tool({
     description:
-      "Return per-provider liquidity and capacity: total and available capital, ticket range, settlement speed, concentration cap, and reliability score. Call when asked about a specific provider's capacity, liquidity, or reliability.",
-    inputSchema: z.object({}).optional(),
-    execute: async () => {
-      const providers = await prisma.capitalProvider.findMany({
+      "Return per-provider liquidity and capacity: total and available capital, ticket range, settlement speed, concentration cap, and reliability score. Use `name` to scope to one provider, and `limit`/`offset` to page — never dump the entire provider book at once.",
+    inputSchema: z
+      .object({
+        name: z.string().optional().describe("filter to a provider whose name contains this (case-insensitive)"),
+        limit: z.number().int().min(1).max(20).optional().describe("max rows (default 8)"),
+        offset: z.number().int().min(0).optional().describe("rows to skip (default 0)"),
+      })
+      .optional(),
+    execute: async ({ name, limit = 8, offset = 0 } = {}) => {
+      const where = name && name.trim() ? { name: { contains: name.trim(), mode: "insensitive" as const } } : {};
+      const all = await prisma.capitalProvider.findMany({
+        where,
         select: {
           name: true,
           archetype: true,
@@ -331,9 +362,11 @@ export const treasuryTools = {
           reliabilityScore: true,
         },
       });
-      if (providers.length === 0)
-        return { summary: "There are no capital providers on file." };
-      const rows = providers.map((p) => ({
+      if (all.length === 0)
+        return { summary: name ? `No provider matches "${name}".` : "There are no capital providers on file.", providers: [] };
+      const total = all.length;
+      const page = all.slice(offset, offset + limit);
+      const rows = page.map((p) => ({
         name: p.name,
         archetype: p.archetype,
         totalPaise: Math.round(Number(p.totalLiquidity.toString()) * 100),
@@ -344,8 +377,10 @@ export const treasuryTools = {
         concentrationCapPct: Number(p.concentrationLimitPct.toString()),
         reliability: Number(p.reliabilityScore.toString()),
       }));
+      const range = total === 0 ? "" : ` — showing ${offset + 1}–${offset + page.length} of ${total}`;
       const summary =
-        "Per provider: " +
+        (name ? `Providers matching "${name}"` : "Providers") +
+        `${range}: ` +
         rows
           .map(
             (r) =>
@@ -354,21 +389,28 @@ export const treasuryTools = {
           )
           .join("; ") +
         ".";
-      return { summary, providers: rows };
+      return { summary, total, limit, offset, providers: rows };
     },
   }),
 
   getActionQueue: tool({
     description:
-      "List invoices pending a financing decision (the action queue). Call when asked about the pending queue, what needs approval, or upcoming decisions.",
-    inputSchema: z.object({}).optional(),
-    execute: async () => {
-      const invoices = await prisma.invoice.findMany({
+      "List invoices pending a financing decision (the action queue). Use `limit`/`offset` to page — never return the entire queue at once. Call when asked about the pending queue, what needs approval, or upcoming decisions.",
+    inputSchema: z
+      .object({
+        limit: z.number().int().min(1).max(20).optional().describe("max rows (default 8)"),
+        offset: z.number().int().min(0).optional().describe("rows to skip (default 0)"),
+      })
+      .optional(),
+    execute: async ({ limit = 8, offset = 0 } = {}) => {
+      const all = await prisma.invoice.findMany({
         include: { customer: true },
         orderBy: { dueDate: "asc" },
       });
-      if (invoices.length === 0) return { summary: "The action queue is empty." };
-      const queue = invoices.map((inv) => ({
+      if (all.length === 0) return { summary: "The action queue is empty.", queue: [] };
+      const total = all.length;
+      const page = all.slice(offset, offset + limit);
+      const queue = page.map((inv) => ({
         id: `AQ-${inv.id}`,
         invoiceId: inv.id,
         customerName: inv.customer.name,
@@ -378,13 +420,12 @@ export const treasuryTools = {
         approvalState: "PENDING_APPROVAL",
         recommendedAction: "FINANCE",
       }));
+      const range = ` — showing ${offset + 1}–${offset + page.length} of ${total}`;
       const summary =
-        `There are ${queue.length} invoices in the action queue. ` +
-        queue
-          .map((q) => `${q.customerName} ${rupees(q.amountPaise)} rupees due ${q.dueDate}`)
-          .join("; ") +
+        `There are ${total} invoices in the action queue${range}. ` +
+        queue.map((q) => `${q.customerName} ${rupees(q.amountPaise)} rupees due ${q.dueDate}`).join("; ") +
         ".";
-      return { summary, queue };
+      return { summary, total, limit, offset, queue };
     },
   }),
 

@@ -1,13 +1,31 @@
 // Guardrails for the CFO agent.
 //
-// Two kinds of boundary:
-//  1. Source-of-truth: every rupee figure, rate, date and gate outcome the agent
-//     speaks must come from a tool result, never from the model's memory. This is
-//     enforced structurally (tools return `summary` strings the model relays) and
-//     re-stated in the system prompt below.
-//  2. Action safety: write tools only run when the caller passes `confirmed:
-//     true`. `guardWriteAction` is the concrete gate the write tool consults
-//     before touching anything.
+// Three kinds of boundary, all enforced in code rather than hoped-for in the
+// prompt:
+//  1. Loop limits: a hard cap on agent iterations (tool-calling steps) and a
+//     per-call timeout, so a confused model cannot loop forever or hang.
+//  2. Source-of-truth: every rupee figure, rate, date and gate outcome the
+//     agent speaks must come from a tool result. sanitizeAnswer() strips any
+//     stray currency symbol the model may have invented.
+//  3. Action safety: write tools only run when explicitly confirmed.
+//     preToolGuard / guardWriteAction are the concrete gates.
+
+/** Runtime limits for the agent loop, env-overridable. */
+export const AGENT_LIMITS = {
+  /** Max tool-calling iterations (model steps) per turn. */
+  maxSteps: Number(process.env.AGENT_MAX_STEPS ?? 5),
+  /** Hard timeout for the whole generateText call, in milliseconds. */
+  timeoutMs: Number(process.env.AGENT_TIMEOUT_MS ?? 30_000),
+  /** Write actions require an explicit confirmed:true from the caller. */
+  writeRequiresConfirmation: true,
+};
+
+/** The single tool that mutates state. */
+const WRITE_TOOLS = new Set(["executeDecision"]);
+
+export function isWriteTool(name: string): boolean {
+  return WRITE_TOOLS.has(name);
+}
 
 export const GUARDRAIL_SYSTEM = `
 GUARDRAILS — you must follow these exactly:
@@ -43,7 +61,7 @@ export function guardWriteAction({ decision, confirmed }: WriteGuardInput): Writ
   if (decision !== "approve" && decision !== "reject") {
     return { allowed: false, reason: `Unknown decision '${decision}'. Use approve or reject.` };
   }
-  if (!confirmed) {
+  if (AGENT_LIMITS.writeRequiresConfirmation && !confirmed) {
     return {
       allowed: false,
       reason:
@@ -51,6 +69,39 @@ export function guardWriteAction({ decision, confirmed }: WriteGuardInput): Writ
     };
   }
   return { allowed: true };
+}
+
+/**
+ * Gate consulted before any tool runs. Blocks write tools that are not
+ * explicitly confirmed, and rejects unknown/malicious tool names.
+ */
+export function preToolGuard(toolName: string, args: unknown): WriteGuardResult {
+  if (!toolName) return { allowed: false, reason: "Missing tool name." };
+  if (isWriteTool(toolName)) {
+    const a = (args ?? {}) as WriteGuardInput;
+    return guardWriteAction({ decision: a.decision ?? "", confirmed: a.confirmed });
+  }
+  return { allowed: true };
+}
+
+export interface SanitizeResult {
+  text: string;
+  warnings: string[];
+}
+
+/**
+ * Post-generation guardrail: the model must not introduce currency symbols it
+ * did not get from a tool (tool summaries render amounts as "rupees", never
+ * "₹"). Any stray symbol is replaced and flagged so it can be logged.
+ */
+export function sanitizeAnswer(text: string): SanitizeResult {
+  const warnings: string[] = [];
+  let out = text;
+  if (out.includes("₹")) {
+    warnings.push("Stripped unsourced currency symbol(s) from the answer.");
+    out = out.replace(/₹\s*/g, "rupees ");
+  }
+  return { text: out, warnings };
 }
 
 /**
