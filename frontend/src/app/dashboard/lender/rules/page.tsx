@@ -1,15 +1,39 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { RiskParameterForm } from "@/components/lender/RiskParameterForm";
 import { LiquidityPoolManager } from "@/components/lender/LiquidityPoolManager";
-import { ArrowLeft, Sliders, Cpu, Activity } from "lucide-react";
+import { ArrowLeft, Sliders, Activity } from "lucide-react";
+import { fetchProviders, CapitalProviderDetail } from "@/lib/api-client";
 
 export default function LenderRuleConfiguratorPage() {
+  const [provider, setProvider] = useState<CapitalProviderDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const res = await fetchProviders();
+      setProvider(res.providers?.[0] ?? null);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  if (loading) {
+    return <p className="py-12 text-center text-sm text-slate-500">Loading rules…</p>;
+  }
+
+  if (!provider) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-sm font-semibold text-slate-900">No capital provider found</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto py-2">
-      {/* Back Link */}
       <div>
         <Link
           href="/dashboard/lender"
@@ -43,11 +67,8 @@ export default function LenderRuleConfiguratorPage() {
         </Link>
       </div>
 
-      {/* Form: Risk Parameter Form */}
-      <RiskParameterForm />
-
-      {/* Liquidity Pool Manager */}
-      <LiquidityPoolManager />
+      <RiskParameterForm provider={provider} />
+      <LiquidityPoolManager provider={provider} />
     </div>
   );
 }

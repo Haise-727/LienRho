@@ -1,42 +1,51 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sliders, ShieldCheck, Check, Sparkles, Save, RotateCcw, AlertCircle } from "lucide-react";
+import { Sliders, Save, Check, AlertCircle } from "lucide-react";
+import { CapitalProviderDetail } from "@/lib/api-client";
 
 interface RiskParameterFormProps {
-  onSave?: (params: RiskParameters) => void;
+  provider: CapitalProviderDetail;
 }
 
-export interface RiskParameters {
-  minYieldApr: number; // e.g. 10.5
-  maxAdvanceRatePct: number; // e.g. 85
-  riskFloor: string; // "A" | "B" | "C" | "D"
-  maxTenorDays: number; // e.g. 90
-  minVerificationTier: string; // "BUYER_ACCEPTED" | "LEDGER_VERIFIED" | "SUPPLIER_ASSERTED"
-  autoBidEnabled: boolean;
-}
-
-export function RiskParameterForm({ onSave }: RiskParameterFormProps) {
-  const [params, setParams] = useState<RiskParameters>({
-    minYieldApr: 10.5,
-    maxAdvanceRatePct: 88,
-    riskFloor: "B",
-    maxTenorDays: 90,
-    minVerificationTier: "LEDGER_VERIFIED",
+export function RiskParameterForm({ provider }: RiskParameterFormProps) {
+  const [params, setParams] = useState({
+    minYieldApr: Number(provider.hurdleRate) * 100,
+    maxAdvanceRatePct: 88, // Doesn't seem to map directly to model, leaving as local for now
+    riskFloor: provider.riskAppetiteFloor || "B",
+    maxTenorDays: provider.maxTenorDays || 90,
+    minVerificationTier: "LEDGER_VERIFIED", // Not in model yet, leave as local
     autoBidEnabled: true,
   });
 
+  const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (onSave) onSave(params);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 4000);
+    setSaving(true);
+    
+    try {
+      await fetch(`/api/providers/${provider.id}/rules`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hurdleRate: params.minYieldApr / 100,
+          riskAppetiteFloor: params.riskFloor,
+          maxTenorDays: params.maxTenorDays,
+        }),
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 4000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xs space-y-6">
+    <form onSubmit={handleSubmit} className="border border-slate-200 bg-white p-8 space-y-6">
       <div className="flex items-center justify-between pb-4 border-b border-slate-100">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
@@ -62,7 +71,7 @@ export function RiskParameterForm({ onSave }: RiskParameterFormProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* 1. Minimum Acceptable Yield (Hurdle Rate) */}
+        {/* 1. Minimum Acceptable Yield */}
         <div className="space-y-2 rounded-xl bg-slate-50 p-5 border border-slate-200/80">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -77,17 +86,17 @@ export function RiskParameterForm({ onSave }: RiskParameterFormProps) {
           </p>
           <input
             type="range"
-            min="8.0"
-            max="18.0"
-            step="0.25"
+            min="5.0"
+            max="25.0"
+            step="0.5"
             value={params.minYieldApr}
             onChange={(e) => setParams({ ...params, minYieldApr: parseFloat(e.target.value) })}
             className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
           />
           <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-            <span>8.0%</span>
-            <span>13.0%</span>
-            <span>18.0%</span>
+            <span>5.0%</span>
+            <span>15.0%</span>
+            <span>25.0%</span>
           </div>
         </div>
 
@@ -170,7 +179,7 @@ export function RiskParameterForm({ onSave }: RiskParameterFormProps) {
         <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3.5 text-xs text-emerald-900 flex items-center gap-2 animate-in fade-in duration-150">
           <Check className="h-4 w-4 text-emerald-600" />
           <span>
-            <strong>Rules Saved Successfully:</strong> Autonomous bidding agent mandate updated. All subsequent live auctions will be bid according to these parameters.
+            <strong>Rules Saved Successfully:</strong> Autonomous bidding agent mandate updated.
           </span>
         </div>
       )}
@@ -183,10 +192,11 @@ export function RiskParameterForm({ onSave }: RiskParameterFormProps) {
 
         <button
           type="submit"
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 text-xs font-bold shadow-xs transition cursor-pointer"
+          disabled={saving}
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-6 py-2.5 text-xs font-bold transition cursor-pointer"
         >
           <Save className="h-3.5 w-3.5" />
-          <span>Save Underwriting Rules</span>
+          <span>{saving ? "Saving..." : "Save Underwriting Rules"}</span>
         </button>
       </div>
     </form>
