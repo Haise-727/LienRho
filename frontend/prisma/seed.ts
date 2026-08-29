@@ -280,6 +280,10 @@ async function main() {
     // `org` here and reseed rather than editing the row by hand: a reseed would
     // otherwise wipe the edit.
     { email: "ragav6032022@gmail.com", displayName: "Ragav Hariharan", org: PLATFORM_SLUG, role: "OWNER" },
+    // Same person, college account. Chrome defaults to whichever Google
+    // session is active, and being refused entry to your own demo because the
+    // browser picked the other address is a bad five minutes to have on stage.
+    { email: "ragavhariharan.t2024@vitstudent.ac.in", displayName: "Ragav Hariharan (VIT)", org: PLATFORM_SLUG, role: "OWNER" },
     { email: "justaweebwithinternet@gmail.com", displayName: "Harsha Sakamuri", org: SUPPLIER, role: "OWNER" },
     { email: "yuvaraj28022005@gmail.com", displayName: "Yuvaraj", org: "meridian-bank", role: "OWNER" },
     { email: "tharoonsays@gmail.com", displayName: "Tharun", org: "rapidfin", role: "OWNER" },
