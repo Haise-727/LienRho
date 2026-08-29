@@ -16,6 +16,7 @@
 
 import { prisma } from '@/lib/db';
 import { fail, toJson } from '@/lib/serialize';
+import { requireOwner } from "@/lib/auth";
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  // Viewers may read the marketplace; only an owner may change it.
+  const auth = await requireOwner();
+  if (auth.response) return auth.response;
+
   try {
     const { id } = await ctx.params;
     const body = (await req.json()) as MandatePatch;

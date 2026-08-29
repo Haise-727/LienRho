@@ -280,6 +280,10 @@ async function main() {
     // `org` here and reseed rather than editing the row by hand: a reseed would
     // otherwise wipe the edit.
     { email: "ragav6032022@gmail.com", displayName: "Ragav Hariharan", org: PLATFORM_SLUG, role: "OWNER" },
+    // Same person, college account. Chrome defaults to whichever Google
+    // session is active, and being refused entry to your own demo because the
+    // browser picked the other address is a bad five minutes to have on stage.
+    { email: "ragavhariharan.t2024@vitstudent.ac.in", displayName: "Ragav Hariharan (VIT)", org: PLATFORM_SLUG, role: "OWNER" },
     { email: "justaweebwithinternet@gmail.com", displayName: "Harsha Sakamuri", org: SUPPLIER, role: "OWNER" },
     { email: "yuvaraj28022005@gmail.com", displayName: "Yuvaraj", org: "meridian-bank", role: "OWNER" },
     { email: "tharoonsays@gmail.com", displayName: "Tharun", org: "rapidfin", role: "OWNER" },
@@ -326,16 +330,25 @@ async function main() {
       cashThresholdPaise: 100_000 * PAISE,
       obligations: {
         create: [
-          // Thursday: the steel invoice draws Vertex down to exactly its buffer.
-          // Dated a day before payroll rather than alongside it so the order is
-          // fixed by date, not by whether a sort happens to be stable.
+          // The steel invoice draws Vertex down to exactly its buffer; payroll
+          // the next day leaves them 9,00,000 short.
+          //
+          // Dated a day apart rather than together so obligation order is fixed
+          // by date, not by whether a sort happens to be stable.
+          //
+          // Deliberately +2/+3 rather than +1/+2. Settlement is counted in
+          // BUSINESS days, so a T+0 offer placed on a Friday or Saturday does
+          // not land until Monday — and with a +2 deadline every offer then
+          // misses the timing gate and the worked example collapses to
+          // NO_ACCEPTABLE_OFFER. Observed on a Saturday, when Rapidfin's
+          // same-day offer arrived two calendar days later than the deadline.
+          // The extra day absorbs any weekend the seed happens to land beside.
           {
             label: "Kalyani Steel — billet delivery",
             amountPaise: 46_072_836,
-            dueDate: daysFromNow(1),
+            dueDate: daysFromNow(2),
           },
-          // Friday: payroll then leaves them 9,00,000 short of the buffer.
-          { label: "September payroll", amountPaise: 900_000 * PAISE, dueDate: daysFromNow(2) },
+          { label: "September payroll", amountPaise: 900_000 * PAISE, dueDate: daysFromNow(3) },
           // Outside the window: should not drive the floor.
           { label: "GST remittance — Q2", amountPaise: 180_000 * PAISE, dueDate: daysFromNow(12) },
         ],
